@@ -149,7 +149,7 @@ You can either clone from a repository or create the files manually:
 #### Option A: Download/Clone
 ```bash
 cd ~
-git clone https://github.com/your-repo/ovgl.git
+git clone https://github.com/theonuverse/ovgl.git
 # OR download and extract
 ```
 
