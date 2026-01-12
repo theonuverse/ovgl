@@ -36,41 +36,22 @@ if [ ! -d "$GLIBC_PREFIX" ]; then
 fi
 
 # Clear LD_PRELOAD to avoid interference
+# Must compile against glibc since preload is loaded into glibc processes
 LD_PRELOAD="" clang \
     --sysroot="$GLIBC_PREFIX" \
     -shared \
     -fPIC \
     -O2 \
-    -Wall \
-    -Wextra \
+    -nostdlib \
     --target=aarch64-linux-gnu \
     -I"$GLIBC_PREFIX/include" \
     -L"$GLIBC_PREFIX/lib" \
     -Wl,--dynamic-linker="$GLIBC_PREFIX/lib/ld-linux-aarch64.so.1" \
     -Wl,-rpath,"$GLIBC_PREFIX/lib" \
+    -Wl,--no-as-needed \
     -o libovgl_preload.so \
     ovgl_preload.c \
-    "$GLIBC_PREFIX/lib/libc.so.6" \
-    "$GLIBC_PREFIX/lib/libdl.so.2" \
-    2>&1 || {
-        # Try alternative compilation
-        warn "Standard build failed, trying alternative..."
-        LD_PRELOAD="" clang \
-            --sysroot="$GLIBC_PREFIX" \
-            -shared \
-            -fPIC \
-            -O2 \
-            --target=aarch64-linux-gnu \
-            -nostdlib \
-            -I"$GLIBC_PREFIX/include" \
-            -L"$GLIBC_PREFIX/lib" \
-            -Wl,--dynamic-linker="$GLIBC_PREFIX/lib/ld-linux-aarch64.so.1" \
-            -Wl,-rpath,"$GLIBC_PREFIX/lib" \
-            -Wl,--no-as-needed \
-            -o libovgl_preload.so \
-            ovgl_preload.c \
-            -lc -ldl
-    }
+    -lc -ldl
 
 if [ ! -f "libovgl_preload.so" ]; then
     error "Failed to build libovgl_preload.so"
