@@ -1,0 +1,131 @@
+#!/data/data/com.termux/files/usr/bin/sh
+#
+# ovgl - Run glibc binaries on Termux without patching
+#
+# Usage: ovgl [options] <program> [args...]
+#
+
+# Configuration
+OVGL_DIR="$(cd "$(dirname "$0")" && pwd)"
+PREFIX="${PREFIX:-/data/data/com.termux/files/usr}"
+GLIBC_PREFIX="${GLIBC_PREFIX:-$PREFIX/glibc}"
+GLIBC_LIB="$GLIBC_PREFIX/lib"
+GLIBC_LOADER="$GLIBC_LIB/ld-linux-aarch64.so.1"
+PRELOAD_LIB="$OVGL_DIR/libovgl_preload.so"
+
+usage() {
+    echo "Usage: ovgl [options] <program> [args...]"
+    echo ""
+    echo "Run glibc ARM64 binaries on Termux without patching."
+    echo ""
+    echo "Options:"
+    echo "    -h, --help      Show this help message"
+    echo "    -d, --debug     Enable debug output"
+    exit 0
+}
+
+error() {
+    echo "Error: $1" >&2
+    exit 1
+}
+
+# Parse options
+DEBUG=""
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -h|--help)
+            usage
+            ;;
+        -d|--debug)
+            DEBUG=1
+            shift
+            ;;
+        --)
+            shift
+            break
+            ;;
+        -*)
+            error "Unknown option: $1"
+            ;;
+        *)
+            break
+            ;;
+    esac
+done
+
+# Check arguments
+if [ $# -eq 0 ]; then
+    error "No program specified. Use 'ovgl --help' for usage."
+fi
+
+PROGRAM="$1"
+shift
+
+# Resolve program path
+if [ "${PROGRAM#/}" = "$PROGRAM" ]; then
+    # Not absolute path
+    if [ "${PROGRAM#./}" != "$PROGRAM" ] || [ "${PROGRAM#*/}" != "$PROGRAM" ]; then
+        # Relative path with ./ or contains /
+        PROGRAM="$(pwd)/$PROGRAM"
+    else
+        # Search in current directory first
+        if [ -x "./$PROGRAM" ]; then
+            PROGRAM="$(pwd)/$PROGRAM"
+        else
+            # Search in PATH
+            OLDIFS="$IFS"
+            IFS=':'
+            FOUND=""
+            for p in $PATH; do
+                if [ -x "$p/$PROGRAM" ]; then
+                    FOUND="$p/$PROGRAM"
+                    break
+                fi
+            done
+            IFS="$OLDIFS"
+            if [ -z "$FOUND" ]; then
+                error "Program not found: $PROGRAM"
+            fi
+            PROGRAM="$FOUND"
+        fi
+    fi
+fi
+
+# Check if program exists
+if [ ! -f "$PROGRAM" ]; then
+    error "Program not found: $PROGRAM"
+fi
+
+if [ ! -x "$PROGRAM" ]; then
+    error "Program is not executable: $PROGRAM"
+fi
+
+# Check dependencies
+if [ ! -f "$GLIBC_LOADER" ]; then
+    error "glibc loader not found: $GLIBC_LOADER"
+fi
+
+if [ ! -f "$PRELOAD_LIB" ]; then
+    error "Preload library not found: $PRELOAD_LIB"
+fi
+
+# Set up environment
+export OVGL_GLIBC_LIB="$GLIBC_LIB"
+export OVGL_GLIBC_LOADER="$GLIBC_LOADER"
+export OVGL_ORIG_EXE="$PROGRAM"
+
+if [ -n "$DEBUG" ] || [ -n "$OVGL_DEBUG" ]; then
+    export OVGL_DEBUG=1
+    echo "ovgl: Running $PROGRAM"
+    echo "ovgl: GLIBC_LIB=$GLIBC_LIB"
+    echo "ovgl: GLIBC_LOADER=$GLIBC_LOADER"
+    echo "ovgl: PRELOAD_LIB=$PRELOAD_LIB"
+fi
+
+# Execute through the glibc loader with our preload library
+exec env LD_PRELOAD="$PRELOAD_LIB" \
+    "$GLIBC_LOADER" \
+    --library-path "$GLIBC_LIB" \
+    --argv0 "$PROGRAM" \
+    "$PROGRAM" \
+    "$@"
