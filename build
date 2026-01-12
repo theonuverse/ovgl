@@ -1,4 +1,5 @@
-#!/data/data/com.termux/files/usr/bin/bash
+#!/bin/bash
+
 #
 # Build script for ovgl - native bionic wrapper with embedded preload
 #

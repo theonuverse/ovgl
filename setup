@@ -1,0 +1,152 @@
+#!/bin/bash
+set -e
+
+# Modular installer for ovgl
+# Usage: curl -sL https://theonuverse.github.io/ovgl/setup | bash
+
+PREFIX="${PREFIX:-/data/data/com.termux/files/usr}"
+RELEASE_BASE="https://github.com/theonuverse/ovgl/releases/download/v0.0.1"
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+info(){ printf "${GREEN}[INFO]${NC} %s\n" "$1"; }
+warn(){ printf "${YELLOW}[WARN]${NC} %s\n" "$1"; }
+err(){ printf "${RED}[ERROR]${NC} %s\n" "$1"; }
+
+die(){ err "$1"; exit 1; }
+
+print_header(){
+	printf "${BLUE}+-----------------------------------+${NC}\n"
+	printf "${BLUE}|   ovgl Quick Installer (v0.0.1)   |\n${NC}"
+	printf "${BLUE}+-----------------------------------+${NC}\n\n"
+}
+
+ensure_pkg(){
+	info "Updating packages..."
+	yes | pkg up >/dev/null 2>&1 || warn "pkg up returned non-zero"
+
+	info "Installing required packages: glibc-repo, glibc, wget"
+	pkg install glibc-repo -y >/dev/null 2>&1 || die "Failed to install glibc-repo"
+	pkg install glibc wget -y >/dev/null 2>&1 || die "Failed to install glibc or wget"
+}
+
+fix_libc_symlink(){
+	GLIBC_LIB="$PREFIX/glibc/lib"
+	if [ -f "$GLIBC_LIB/libc.so" ] && [ ! -L "$GLIBC_LIB/libc.so" ]; then
+		info "Backing up existing libc.so and creating symlink to libc.so.6"
+		mv "$GLIBC_LIB/libc.so" "$GLIBC_LIB/libc.so.script" || warn "Couldn't move libc.so"
+	fi
+	if [ ! -L "$GLIBC_LIB/libc.so" ]; then
+		ln -s "$GLIBC_LIB/libc.so.6" "$GLIBC_LIB/libc.so" || warn "Couldn't create libc.so symlink"
+	fi
+}
+
+download_and_verify(){
+	# $1 = url_path (relative to RELEASE_BASE)
+	# $2 = dest filename
+	# $3 = optional sha256 value (hex)
+	local url="$RELEASE_BASE/$1"
+	local dest="$2"
+	local want_sha="$3"
+
+	info "Downloading $dest..."
+	if ! wget -qO "$dest" "$url"; then
+		warn "Failed to download $url"
+		return 1
+	fi
+
+	if [ -n "$want_sha" ]; then
+		if command -v sha256sum >/dev/null 2>&1; then
+			local got
+			got=$(sha256sum "$dest" | awk '{print $1}')
+			if [ "$got" != "$want_sha" ]; then
+				rm -f "$dest"
+				die "Checksum mismatch for $dest"
+			else
+				info "Checksum OK for $dest"
+			fi
+		else
+			warn "sha256sum not available; skipping checksum for $dest"
+		fi
+	fi
+	return 0
+}
+
+install_binary(){
+	# $1 = filename in cwd
+	# $2 = target path (optional)
+	local src="$1"
+	local tgt="${2:-$PREFIX/bin/}"
+	chmod +x "$src" || warn "chmod failed on $src"
+	cp "$src" "$tgt" || die "Failed to copy $src to $tgt"
+	info "Installed $src to $tgt"
+}
+
+install_x86_libs(){
+	local archive="$1"
+	if [ -f "$archive" ]; then
+		mkdir -p "$HOME/.x86_64_libs"
+		tar -xzf "$archive" -C "$HOME/.x86_64_libs" || warn "Failed to extract x86_64 libs"
+		info "Saved x86_64 libs to $HOME/.x86_64_libs"
+	else
+		warn "No x86_64 libs archive present"
+	fi
+}
+
+main(){
+	print_header
+	ensure_pkg
+	fix_libc_symlink
+
+	local tmpdir
+	tmpdir=$(mktemp -d)
+	cd "$tmpdir"
+
+	# Example: checksums can be provided here. For v0.0.1 we don't have published checksums,
+	# but the structure supports adding them later.
+	local ovgl_sha=""
+	local box64_sha=""
+	local libs_sha=""
+
+	if download_and_verify "ovgl" ovgl "$ovgl_sha"; then
+		install_binary ovgl
+	else
+		die "ovgl download failed"
+	fi
+
+	if download_and_verify "box64" box64 "$box64_sha"; then
+		install_binary box64
+	else
+		warn "box64 not installed"
+	fi
+
+	if download_and_verify "x86_64_libs.tar.gz" x86_64_libs.tar.gz "$libs_sha"; then
+		install_x86_libs x86_64_libs.tar.gz
+	else
+		warn "x86_64 libs archive not found; you can populate $HOME/.x86_64_libs manually"
+	fi
+
+	# Cleanup
+	cd - >/dev/null 2>&1 || true
+	rm -rf "$tmpdir"
+
+	printf "\n${GREEN}+-----------------------------------+${NC}\n"
+	printf "${GREEN}Installation complete!${NC}\n"
+	printf "${GREEN}ovgl and box64 (if available) are installed to: ${YELLOW}$PREFIX/bin/${NC}\n"
+	printf "${GREEN}x86_64 libraries (if available) are in: ${YELLOW}$HOME/.x86_64_libs${NC}\n"
+	printf "${GREEN}+-----------------------------------+${NC}\n\n"
+
+	printf "${BLUE}Next steps:${NC}\n"
+	printf "  - Ensure $PREFIX/bin is in your PATH\n"
+	printf "  - Run: ovgl <binary> [args...]\n"
+	printf "  - For x86_64 binaries, verify $HOME/.x86_64_libs contains necessary libs\n"
+
+	exit 0
+}
+
+main "$@"

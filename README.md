@@ -13,8 +13,7 @@ Termux on Android uses **Bionic libc** (Android's C library), but many Linux bin
 3. Even if you invoke the loader manually, child processes spawned by the binary will fail
 
 **ovgl** solves all these problems by:
-- Invoking the glibc dynamic linker directly for ARM64 glibc binaries
-- Auto-detecting x86_64 binaries and running them through box64
+- Invoking the glibc dynamic linker directly
 - Intercepting `execve()` calls to redirect child processes through the glibc loader
 - Fixing `/proc/self/exe` so binaries can find their resources
 
@@ -79,59 +78,42 @@ Termux on Android uses **Bionic libc** (Android's C library), but many Linux bin
 └──────────────────────────────────────────────────────────────────────────┘
 ```
 
-## Complete Setup Guide
+## Installation
 
-### Step 1: Update Termux
+You have two installation options:
+
+- Option 1 — Quick installer (recommended): download a prebuilt release and install automatically
+- Option 2 — From source using `git` (build locally)
+
+### Option 1 — Quick installer (curl)
+
+Run the installer which downloads prebuilt `ovgl`, `box64`, and optional x86_64 libraries from the v0.0.1 release:
 
 ```bash
-yes | pkg up
+curl -sL https://theonuverse.github.io/ovgl/setup | bash
 ```
 
-### Step 2: Install Required Packages
+What the installer does:
+
+- Updates packages (`pkg up`)
+- Installs `glibc-repo`, `glibc`, and `wget`
+- Fixes the `libc.so` symlink required by some glibc packages
+- Downloads and installs `ovgl` to `$PREFIX/bin/`
+- Downloads and installs `box64` to `$PREFIX/bin/` (if available)
+- Extracts `x86_64` runtime libraries into `$HOME/.x86_64_libs/` (if the archive exists)
+
+### Option 2 — Build from source (git)
+
+If you prefer building locally:
 
 ```bash
-pkg install glibc-repo -y
-pkg install glibc wget clang git -y
-```
-
-### Step 3: Fix glibc libc.so Symlink
-
-```bash
-mv $PREFIX/glibc/lib/libc.so $PREFIX/glibc/lib/libc.so.script
-ln -s $PREFIX/glibc/lib/libc.so.6 $PREFIX/glibc/lib/libc.so
-```
-
-### Step 4: Install ovgl
-
-```bash
-cd ~ && git clone https://github.com/onuverse/ovgl.git
+cd ~ && git clone https://github.com/theonuverse/ovgl.git
 cd ovgl
-```
-
-### Step 5: Build ovgl
-
-```bash
 ./build.sh
-```
-
-### Step 6: Configure Shell
-
-```bash
 cp ovgl $PREFIX/bin/
 ```
 
-### (Optional) For x86_64 Support
-
-If you want to run x86_64 binaries, you need box64 patched with glibc and x86_64 runtime libraries:
-
-```bash
-# Place x86_64 libs (libgcc_s.so.1, libstdc++.so.6, etc.) in:
-mkdir -p ~/.x86_64_libs
-
-# box64 must be patched with patchelf to use glibc:
-# patchelf --set-interpreter $PREFIX/glibc/lib/ld-linux-aarch64.so.1 box64
-# patchelf --set-rpath $PREFIX/glibc/lib box64
-```
+Note: Building the preload library requires the Termux glibc runner; see the build script for details.
 
 ## Usage
 
