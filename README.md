@@ -19,7 +19,6 @@
 - [Technical Details](#technical-details)
 - [Troubleshooting](#troubleshooting)
 - [The Problem ovgl Solves](#the-problem-ovgl-solves)
-- [Alternative: Manual Patching (Old Method)](#alternative-manual-patching-old-method)
 - [License](#license)
 
 ---
@@ -94,14 +93,10 @@ Termux on Android uses **Bionic libc** (Android's C library), but many Linux bin
 
 ### Step 1: Update Termux
 
-First, make sure Termux is using a good mirror and is fully updated:
+First, make sure Termux is fully updated:
 
 ```bash
-# Change to a fast mirror (select a mirror close to you)
-termux-change-repo
-
-# Update all packages
-yes | pkg update && pkg upgrade -y
+yes | pkg up
 ```
 
 ### Step 2: Install Required Packages
@@ -109,11 +104,8 @@ yes | pkg update && pkg upgrade -y
 Install the glibc repository and necessary tools:
 
 ```bash
-# Install glibc repository and basic tools
-pkg install glibc-repo wget strace file clang git -y
-
-# Install glibc and patchelf (patchelf is optional but useful for debugging)
-pkg install glibc patchelf -y
+pkg ins glibc-repo wget clang git -y
+pkg ins glibc -y
 ```
 
 **Installed packages:**
@@ -130,10 +122,7 @@ pkg install glibc patchelf -y
 Termux's glibc package has a `libc.so` that's a linker script, which can cause issues. We need to replace it with a symlink to the actual library:
 
 ```bash
-# Backup the linker script
 mv $PREFIX/glibc/lib/libc.so $PREFIX/glibc/lib/libc.so.script
-
-# Create symlink to the real library
 ln -s $PREFIX/glibc/lib/libc.so.6 $PREFIX/glibc/lib/libc.so
 ```
 
@@ -144,18 +133,13 @@ The original `libc.so` is a linker script that references multiple libraries. So
 
 #### Download/Clone
 ```bash
-cd ~
-git clone https://github.com/theonuverse/ovgl.git
-# OR download and extract
+cd ~ && git clone https://github.com/theonuverse/ovgl.git
 ```
 
 ### Step 5: Build ovgl
 
 ```bash
-cd ~/ovgl
-
-# Clear LD_PRELOAD to avoid bionic interference during build
-LD_PRELOAD="" sh build.sh
+cd ~/ovgl && sh build.sh
 ```
 
 Expected output:
@@ -173,15 +157,12 @@ Expected output:
 Add ovgl to your PATH and create an alias to avoid LD_PRELOAD issues:
 
 ```bash
-# Add to ~/.bashrc or ~/.profile
 cat >> ~/.bashrc << 'EOF'
 
 # ovgl - glibc binary runner
 export PATH="$HOME/ovgl:$PATH"
-alias ovgl='LD_PRELOAD="" ovgl'
 EOF
 
-# Reload
 source ~/.bashrc
 ```
 
@@ -203,18 +184,6 @@ ovgl -d ./program
 
 # Or with environment variable
 OVGL_DEBUG=1 ovgl ./program
-```
-
-### Alias (Recommended)
-
-If you set up the alias in Step 6, you can simply run:
-```bash
-ovgl ./program
-```
-
-Without the alias, you need:
-```bash
-LD_PRELOAD="" ovgl ./program
 ```
 
 ---
@@ -363,14 +332,6 @@ Check debug output for:
 
 If you don't see this, the preload library isn't being loaded in child processes.
 
-### Build fails
-
-Make sure you have clang and clear LD_PRELOAD:
-```bash
-pkg install clang
-cd ~/ovgl
-LD_PRELOAD="" sh build.sh
-```
 
 ---
 
@@ -402,60 +363,11 @@ LD_PRELOAD="" sh build.sh
 
 ---
 
-## Alternative: Manual Patching (Old Method)
-
-If you prefer to patch binaries instead of using ovgl:
-
-```bash
-export G_LIB="$PREFIX/glibc/lib"
-export G_LDR="$PREFIX/glibc/lib/ld-linux-aarch64.so.1"
-
-# Patch the binary
-patchelf --set-interpreter "$G_LDR" --set-rpath "$G_LIB" ./program
-
-# Run directly (no ovgl needed)
-LD_PRELOAD="" ./program
-```
-
-**Downsides of patching:**
-- Modifies the binary permanently
-- Need to patch every binary
-- Need to re-patch after updates
-- Can't run the same binary on other systems
-
 **ovgl advantages:**
 - No modification to binaries
 - Works with all glibc binaries automatically
 - Handles child processes
 - Binaries remain portable
-
----
-
-## Quick Reference
-
-```bash
-# One-time setup
-termux-change-repo
-yes | pkg update && pkg upgrade -y
-pkg install glibc-repo wget clang -y
-pkg install glibc -y
-
-# Fix libc.so
-mv $PREFIX/glibc/lib/libc.so $PREFIX/glibc/lib/libc.so.script
-ln -s $PREFIX/glibc/lib/libc.so.6 $PREFIX/glibc/lib/libc.so
-
-# Install ovgl (download or create files as shown above)
-cd ~/ovgl
-LD_PRELOAD="" sh build.sh
-
-# Add to ~/.bashrc
-echo 'export PATH="$HOME/ovgl:$PATH"' >> ~/.bashrc
-echo 'alias ovgl="LD_PRELOAD=\"\" ovgl"' >> ~/.bashrc
-source ~/.bashrc
-
-# Usage
-ovgl ./any_glibc_binary
-```
 
 ---
 
