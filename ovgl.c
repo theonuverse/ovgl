@@ -203,7 +203,73 @@ static char *find_in_path(const char *name, char *resolved, size_t size) {
 }
 
 static char *find_box64(char *resolved, size_t size) {
+    /* Prefer system box64 at $PREFIX/bin over any other location */
+    const char *prefix = getenv("PREFIX");
+    if (!prefix) prefix = "/data/data/com.termux/files/usr";
+    
+    char sys_box64[PATH_MAX];
+    snprintf(sys_box64, sizeof(sys_box64), "%s/bin/box64", prefix);
+    
+    if (access(sys_box64, X_OK) == 0) {
+        char *rp = realpath(sys_box64, resolved);
+        if (rp) return rp;
+    }
+    
+    /* Fallback to PATH search */
     return find_in_path("box64", resolved, size);
+}
+
+/* ============== Box64 Wrapper for Child Process Support ============== */
+
+/* When BOX64_LD_PRELOAD is set to ~/ovgl/libovgl_preload.so, box64 adds
+ * ~/ovgl/ to its binary search path. When a x86_64 binary forks and execs
+ * another x86_64 binary, box64 looks for itself in that path.
+ * 
+ * Since box64 is a glibc binary that needs to run through the glibc loader,
+ * we create a wrapper script that invokes box64 correctly. */
+static void ensure_box64_wrapper(const char *real_box64_path) {
+    const char *home = getenv("HOME");
+    if (!home) return;
+    
+    char wrapper_path[PATH_MAX];
+    snprintf(wrapper_path, sizeof(wrapper_path), "%s/ovgl/box64", home);
+    
+    /* Check if wrapper already exists and is correct */
+    struct stat st;
+    if (stat(wrapper_path, &st) == 0) {
+        /* Check if it's a regular file (script) vs symlink */
+        if (S_ISREG(st.st_mode) && (st.st_mode & S_IXUSR)) {
+            /* Already exists as executable script - check if it has correct content */
+            FILE *f = fopen(wrapper_path, "r");
+            if (f) {
+                char buf[512];
+                if (fgets(buf, sizeof(buf), f) && strstr(buf, "#!/")) {
+                    /* Has shebang, check for box64 path */
+                    if (fgets(buf, sizeof(buf), f)) {
+                        if (strstr(buf, real_box64_path)) {
+                            fclose(f);
+                            return; /* Already correct */
+                        }
+                    }
+                }
+                fclose(f);
+            }
+        }
+        /* Remove old file/symlink */
+        unlink(wrapper_path);
+    }
+    
+    /* Create wrapper script that invokes box64 through glibc loader */
+    FILE *f = fopen(wrapper_path, "w");
+    if (!f) return;
+    
+    fprintf(f, "#!/data/data/com.termux/files/usr/bin/sh\n");
+    fprintf(f, "exec %s --library-path %s %s \"$@\"\n", 
+            GLIBC_LOADER, GLIBC_LIB, real_box64_path);
+    fclose(f);
+    
+    /* Make executable */
+    chmod(wrapper_path, 0755);
 }
 
 /* ============== Preload Library Extraction ============== */
@@ -277,7 +343,7 @@ static char **build_environment(const char *preload_path, int for_box64, int use
     while (environ[envc]) envc++;
     
     /* Allocate space for existing + new vars + NULL */
-    char **new_env = malloc((envc + 12) * sizeof(char *));
+    char **new_env = malloc((envc + 15) * sizeof(char *));
     if (!new_env) return NULL;
     
     int j = 0;
@@ -331,6 +397,9 @@ static char **build_environment(const char *preload_path, int for_box64, int use
             snprintf(buf, sizeof(buf), "BOX64_LD_PRELOAD=%s", preload_path);
             new_env[j++] = strdup(buf);
         }
+        
+        /* Fake uname to report x86_64 so launchers don't bail out */
+        new_env[j++] = strdup("BOX64_UNAME=x86_64");
         
         /* Clear LD_PRELOAD for the native box64 binary itself */
         new_env[j++] = strdup("LD_PRELOAD=");
@@ -510,6 +579,9 @@ int main(int argc, char *argv[]) {
             fprintf(stderr, COLOR_YELLOW "hint:" COLOR_RESET " Install box64 or add it to your PATH\n");
             return 127;
         }
+        
+        /* Create wrapper script so box64 can find itself for child x86_64 processes */
+        ensure_box64_wrapper(box64_path);
         
         if (debug) {
             fprintf(stderr, COLOR_BLUE "ovgl:" COLOR_RESET " Using box64: %s\n", box64_path);
