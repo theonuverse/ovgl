@@ -131,6 +131,10 @@ main(){
 		warn "x86_64 libs archive not found; you can populate $HOME/.x86_64_libs manually"
 	fi
 
+	# Create ~/ovgl directory for preload library and box64 wrapper
+	mkdir -p "$HOME/ovgl"
+	info "Created $HOME/ovgl directory"
+
 	# Cleanup
 	cd - >/dev/null 2>&1 || true
 	rm -rf "$tmpdir"

@@ -283,6 +283,11 @@ static char *extract_preload_library(char *path_buf, size_t path_size) {
     /* Write to a persistent temp file location */
     const char *home = getenv("HOME");
     if (home) {
+        /* Ensure ~/ovgl/ directory exists */
+        char ovgl_dir[PATH_MAX];
+        snprintf(ovgl_dir, sizeof(ovgl_dir), "%s/ovgl", home);
+        mkdir(ovgl_dir, 0755); /* Ignore errors if exists */
+        
         snprintf(path_buf, path_size, "%s/ovgl/libovgl_preload.so", home);
         
         /* Check if file already exists with correct size */
