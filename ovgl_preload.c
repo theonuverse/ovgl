@@ -217,6 +217,72 @@ static void free_strarray(char **arr) {
     free(arr);
 }
 
+// Build envp for non-glibc binaries - remove glibc paths from LD_LIBRARY_PATH
+static char **build_clean_envp_for_bionic(char *const envp[]) {
+    const char *glibc_lib = getenv(GLIBC_LIB_ENV);
+    
+    // Count original envp
+    int envc = 0;
+    while (envp[envc]) envc++;
+    
+    // Allocate space for original + NULL
+    char **new_envp = malloc((envc + 1) * sizeof(char *));
+    if (!new_envp) return NULL;
+    
+    int j = 0;
+    for (int i = 0; i < envc; i++) {
+        // Clean LD_LIBRARY_PATH - remove glibc paths
+        if (strncmp(envp[i], "LD_LIBRARY_PATH=", 16) == 0) {
+            if (glibc_lib && strstr(envp[i], glibc_lib) != NULL) {
+                // Need to filter out glibc paths
+                char *value = strdup(envp[i] + 16);
+                char *new_value = malloc(strlen(value) + 32);
+                new_value[0] = '\0';
+                
+                char *saveptr;
+                char *token = strtok_r(value, ":", &saveptr);
+                int first = 1;
+                
+                while (token) {
+                    // Skip paths containing glibc lib path
+                    if (!glibc_lib || strstr(token, glibc_lib) == NULL) {
+                        if (!first) strcat(new_value, ":");
+                        strcat(new_value, token);
+                        first = 0;
+                    } else {
+                        debug_print("Removing glibc path from LD_LIBRARY_PATH: %s", token);
+                    }
+                    token = strtok_r(NULL, ":", &saveptr);
+                }
+                
+                free(value);
+                
+                if (strlen(new_value) > 0) {
+                    char *new_env = malloc(strlen(new_value) + 20);
+                    sprintf(new_env, "LD_LIBRARY_PATH=%s", new_value);
+                    new_envp[j++] = new_env;
+                }
+                // else: skip LD_LIBRARY_PATH entirely if empty
+                free(new_value);
+                continue;
+            }
+        }
+        
+        // Skip LD_PRELOAD with glibc preload lib (it won't work with bionic)
+        if (strncmp(envp[i], "LD_PRELOAD=", 11) == 0) {
+            if (strstr(envp[i], "libovgl_preload") != NULL) {
+                debug_print("Removing glibc LD_PRELOAD for bionic binary");
+                continue;
+            }
+        }
+        
+        new_envp[j++] = strdup(envp[i]);
+    }
+    
+    new_envp[j] = NULL;
+    return new_envp;
+}
+
 // Hooked execve
 int execve(const char *pathname, char *const argv[], char *const envp[]) {
     if (!real_execve) {
@@ -244,7 +310,18 @@ int execve(const char *pathname, char *const argv[], char *const envp[]) {
     // Check if it's a glibc binary
     int is_glibc = is_glibc_elf(resolved);
     if (is_glibc != 1) {
-        debug_print("Not a glibc binary (result=%d), passing through", is_glibc);
+        debug_print("Not a glibc binary (result=%d), cleaning env and passing through", is_glibc);
+        
+        // For non-glibc binaries, we need to clean the environment
+        // to remove glibc paths that would confuse Android's linker
+        char **clean_envp = build_clean_envp_for_bionic(envp);
+        if (clean_envp) {
+            int ret = real_execve(pathname, argv, clean_envp);
+            int saved_errno = errno;
+            free_strarray(clean_envp);
+            errno = saved_errno;
+            return ret;
+        }
         return real_execve(pathname, argv, envp);
     }
     
