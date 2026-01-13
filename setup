@@ -91,7 +91,7 @@ install_x86_libs(){
 	local archive="$1"
 	if [ -f "$archive" ]; then
 		mkdir -p "$PREFIX/glibc/lib_x86_64"
-		tar -xzf "$archive" -C "$PREFIX/glibc/lib_x86_64" --strip-components=1 || warn "Failed to extract x86_64 libs"
+		tar -xzf "$archive" -C "$PREFIX/glibc/lib_x86_64" || warn "Failed to extract x86_64 libs"
 		info "Installed x86_64 libs to $PREFIX/glibc/lib_x86_64"
 	else
 		warn "No x86_64 libs archive present"

@@ -29,6 +29,7 @@
 #define GLIBC_LIB GLIBC_PREFIX "/lib"
 #define GLIBC_LIB_X86_64 GLIBC_PREFIX "/lib_x86_64"
 #define GLIBC_LOADER GLIBC_LIB "/ld-linux-aarch64.so.1"
+#define BOX64_X86_LIBS_DEFAULT "glibc/lib_x86_64"
 
 #define COLOR_RED     "\033[0;31m"
 #define COLOR_GREEN   "\033[0;32m"
