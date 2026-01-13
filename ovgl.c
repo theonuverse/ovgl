@@ -370,6 +370,7 @@ static char **build_environment(const char *preload_path, int for_box64, int use
         if (strncmp(environ[i], "OVGL_GLIBC_LOADER=", 18) == 0) continue;
         if (strncmp(environ[i], "OVGL_ORIG_EXE=", 14) == 0) continue;
         if (strncmp(environ[i], "BOX64_LD_PRELOAD=", 17) == 0) continue;
+        if (strncmp(environ[i], "BOX64_PATH=", 11) == 0) continue;
         /* Keep user's BOX64_LD_LIBRARY_PATH if set, otherwise we'll add default */
         if (!for_box64 && strncmp(environ[i], "BOX64_LD_LIBRARY_PATH=", 22) == 0) continue;
         
@@ -397,6 +398,12 @@ static char **build_environment(const char *preload_path, int for_box64, int use
             snprintf(buf, sizeof(buf), "BOX64_LD_LIBRARY_PATH=%s", x86_libs_path);
             new_env[j++] = strdup(buf);
         }
+        
+        /* Set BOX64_PATH so box64 can find the wrapper for fork/exec */
+        const char *prefix = getenv("PREFIX");
+        if (!prefix) prefix = "/data/data/com.termux/files/usr";
+        snprintf(buf, sizeof(buf), "BOX64_PATH=%s/ovgl/:%s/bin/", home ? home : "/data/data/com.termux/files/home", prefix);
+        new_env[j++] = strdup(buf);
         
         if (preload_path && use_preload) {
             snprintf(buf, sizeof(buf), "BOX64_LD_PRELOAD=%s", preload_path);
