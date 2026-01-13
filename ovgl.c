@@ -27,8 +27,8 @@
 
 #define GLIBC_PREFIX "/data/data/com.termux/files/usr/glibc"
 #define GLIBC_LIB GLIBC_PREFIX "/lib"
+#define GLIBC_LIB_X86_64 GLIBC_PREFIX "/lib_x86_64"
 #define GLIBC_LOADER GLIBC_LIB "/ld-linux-aarch64.so.1"
-#define BOX64_X86_LIBS_DEFAULT ".x86_64_libs"
 
 #define COLOR_RED     "\033[0;31m"
 #define COLOR_GREEN   "\033[0;32m"
@@ -319,14 +319,7 @@ static char **build_environment(const char *preload_path, int for_box64, int use
     
     int j = 0;
     const char *home = getenv("HOME");
-    char x86_libs_path[PATH_MAX];
-    
-    /* Build x86_64 libs path */
-    if (home) {
-        snprintf(x86_libs_path, sizeof(x86_libs_path), "%s/%s", home, BOX64_X86_LIBS_DEFAULT);
-    } else {
-        snprintf(x86_libs_path, sizeof(x86_libs_path), "/data/data/com.termux/files/home/%s", BOX64_X86_LIBS_DEFAULT);
-    }
+    (void)home; /* May be unused now */
     
     /* Copy existing env, filtering some vars */
     for (int i = 0; i < envc; i++) {
@@ -361,7 +354,7 @@ static char **build_environment(const char *preload_path, int for_box64, int use
     if (for_box64) {
         /* For box64: set BOX64_LD_LIBRARY_PATH if not already set by user */
         if (!getenv("BOX64_LD_LIBRARY_PATH")) {
-            snprintf(buf, sizeof(buf), "BOX64_LD_LIBRARY_PATH=%s", x86_libs_path);
+            snprintf(buf, sizeof(buf), "BOX64_LD_LIBRARY_PATH=%s", GLIBC_LIB_X86_64);
             new_env[j++] = strdup(buf);
         }
         

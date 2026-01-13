@@ -90,9 +90,9 @@ install_binary(){
 install_x86_libs(){
 	local archive="$1"
 	if [ -f "$archive" ]; then
-		mkdir -p "$HOME/.x86_64_libs"
-		tar -xzf "$archive" -C "$HOME/.x86_64_libs" || warn "Failed to extract x86_64 libs"
-		info "Saved x86_64 libs to $HOME/.x86_64_libs"
+		mkdir -p "$PREFIX/glibc/lib_x86_64"
+		tar -xzf "$archive" -C "$PREFIX/glibc/lib_x86_64" --strip-components=1 || warn "Failed to extract x86_64 libs"
+		info "Installed x86_64 libs to $PREFIX/glibc/lib_x86_64"
 	else
 		warn "No x86_64 libs archive present"
 	fi
@@ -128,7 +128,7 @@ main(){
 	if download_and_verify "x86_64_libs.tar.gz" x86_64_libs.tar.gz "$libs_sha"; then
 		install_x86_libs x86_64_libs.tar.gz
 	else
-		warn "x86_64 libs archive not found; you can populate $HOME/.x86_64_libs manually"
+		warn "x86_64 libs archive not found; you can populate $PREFIX/glibc/lib_x86_64 manually"
 	fi
 
 	# Create $PREFIX/glibc/bin directory for box64 wrapper
@@ -150,13 +150,12 @@ main(){
 	printf "\n${GREEN}+-----------------------------------+${NC}\n"
 	printf "${GREEN}Installation complete!${NC}\n"
 	printf "${GREEN}ovgl and box64 (if available) are installed to: ${YELLOW}$PREFIX/bin/${NC}\n"
-	printf "${GREEN}x86_64 libraries (if available) are in: ${YELLOW}$HOME/.x86_64_libs${NC}\n"
+	printf "${GREEN}x86_64 libraries (if available) are in: ${YELLOW}$PREFIX/glibc/lib_x86_64${NC}\n"
 	printf "${GREEN}+-----------------------------------+${NC}\n\n"
 
 	printf "${BLUE}Next steps:${NC}\n"
 	printf "  - Ensure $PREFIX/bin is in your PATH\n"
 	printf "  - Run: ovgl <binary> [args...]\n"
-	printf "  - For x86_64 binaries, verify $HOME/.x86_64_libs contains necessary libs\n"
 
 	exit 0
 }

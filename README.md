@@ -100,7 +100,8 @@ What the installer does:
 - Fixes the `libc.so` symlink required by some glibc packages
 - Downloads and installs `ovgl` to `$PREFIX/bin/`
 - Downloads and installs `box64` to `$PREFIX/bin/` (if available)
-- Extracts `x86_64` runtime libraries into `$HOME/.x86_64_libs/` (if the archive exists)
+- Extracts `x86_64` runtime libraries into `$PREFIX/glibc/lib_x86_64/` (if the archive exists)
+- Downloads and installs the preload library to `$PREFIX/glibc/lib/`
 
 ### Option 2 — Build from source (git)
 
@@ -109,11 +110,10 @@ If you prefer building locally:
 ```bash
 cd ~ && git clone https://github.com/theonuverse/ovgl.git
 cd ovgl
-./build.sh
-cp ovgl $PREFIX/bin/
+./build
 ```
 
-Note: Building the preload library requires the Termux glibc runner; see the build script for details.
+The build script automatically installs `ovgl` to `$PREFIX/bin/` and `libovgl_preload.so` to `$PREFIX/glibc/lib/`.
 
 ## Usage
 
@@ -150,7 +150,7 @@ ovgl -n ./simple_app
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `BOX64_LD_LIBRARY_PATH` | `~/.x86_64_libs` | x86_64 library search path |
+| `BOX64_LD_LIBRARY_PATH` | `$PREFIX/glibc/lib_x86_64` | x86_64 library search path |
 | `OVGL_GLIBC_LIB` | `$PREFIX/glibc/lib` | glibc library path |
 | `OVGL_GLIBC_LOADER` | `$PREFIX/glibc/lib/ld-linux-aarch64.so.1` | glibc loader |
 | `OVGL_DEBUG` | unset | Set to `1` to enable debug output |
@@ -212,10 +212,10 @@ ovgl -d ./program
 
 ### Missing x86_64 libraries
 
-For x86_64 binaries, ensure libraries are in `~/.x86_64_libs/`:
+For x86_64 binaries, ensure libraries are in `$PREFIX/glibc/lib_x86_64/`:
 
 ```bash
-ls ~/.x86_64_libs/
+ls $PREFIX/glibc/lib_x86_64/
 # Should contain: libgcc_s.so.1, libstdc++.so.6, etc.
 ```
 
