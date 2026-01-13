@@ -118,14 +118,23 @@ printf "${GREEN}========================================${NC}\n"
 printf "${GREEN}Build complete!${NC}\n"
 printf "${GREEN}========================================${NC}\n"
 echo ""
-echo "Files created:"
-echo "  • ovgl                  - Main wrapper binary (bionic)"
-echo "  • libovgl_preload.so    - Preload library (glibc)"
-echo "  • preload_data.h        - Embedded preload data"
+
+# ============== Step 5: Install ==============
+
+info "Step 5: Installing..."
+
+cp ovgl "$PREFIX/bin/"
+chmod +x "$PREFIX/bin/ovgl"
+info "Installed ovgl to $PREFIX/bin/"
+
+cp libovgl_preload.so "$GLIBC_PREFIX/lib/"
+chmod +x "$GLIBC_PREFIX/lib/libovgl_preload.so"
+info "Installed libovgl_preload.so to $GLIBC_PREFIX/lib/"
+
 echo ""
-echo "Installation:"
-echo "  cp ovgl \$PREFIX/bin/"
-echo "  chmod +x \$PREFIX/bin/ovgl"
+printf "${GREEN}========================================${NC}\n"
+printf "${GREEN}Installation complete!${NC}\n"
+printf "${GREEN}========================================${NC}\n"
 echo ""
 echo "Usage:"
 echo "  ovgl <binary> [args...]"
