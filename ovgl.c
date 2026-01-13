@@ -221,18 +221,13 @@ static char *find_box64(char *resolved, size_t size) {
 
 /* ============== Box64 Wrapper for Child Process Support ============== */
 
-/* When BOX64_LD_PRELOAD is set to ~/ovgl/libovgl_preload.so, box64 adds
- * ~/ovgl/ to its binary search path. When a x86_64 binary forks and execs
- * another x86_64 binary, box64 looks for itself in that path.
- * 
- * Since box64 is a glibc binary that needs to run through the glibc loader,
- * we create a wrapper script that invokes box64 correctly. */
+/* When a x86_64 binary forks and execs another x86_64 binary, box64 looks 
+ * for itself in BOX64_PATH. Since box64 is a glibc binary that needs to run 
+ * through the glibc loader, we create a wrapper script at $PREFIX/glibc/bin/box64
+ * that invokes box64 correctly. */
 static void ensure_box64_wrapper(const char *real_box64_path) {
-    const char *home = getenv("HOME");
-    if (!home) return;
-    
     char wrapper_path[PATH_MAX];
-    snprintf(wrapper_path, sizeof(wrapper_path), "%s/ovgl/box64", home);
+    snprintf(wrapper_path, sizeof(wrapper_path), "%s/bin/box64", GLIBC_PREFIX);
     
     /* Check if wrapper already exists and is correct */
     struct stat st;
@@ -280,58 +275,29 @@ static char *extract_preload_library(char *path_buf, size_t path_size) {
         return NULL;
     }
     
-    /* Write to a persistent temp file location */
-    const char *home = getenv("HOME");
-    if (home) {
-        /* Ensure ~/ovgl/ directory exists */
-        char ovgl_dir[PATH_MAX];
-        snprintf(ovgl_dir, sizeof(ovgl_dir), "%s/ovgl", home);
-        mkdir(ovgl_dir, 0755); /* Ignore errors if exists */
-        
-        snprintf(path_buf, path_size, "%s/ovgl/libovgl_preload.so", home);
-        
-        /* Check if file already exists with correct size */
-        struct stat st;
-        if (stat(path_buf, &st) == 0 && (size_t)st.st_size == preload_so_size) {
+    /* Write to $PREFIX/glibc/lib/ */
+    snprintf(path_buf, path_size, "%s/libovgl_preload.so", GLIBC_LIB);
+    
+    /* Check if file already exists with correct size */
+    struct stat st;
+    if (stat(path_buf, &st) == 0 && (size_t)st.st_size == preload_so_size) {
+        return path_buf;
+    }
+    
+    /* Write the file */
+    int fd = open(path_buf, O_WRONLY | O_CREAT | O_TRUNC, 0755);
+    if (fd >= 0) {
+        ssize_t written = write(fd, preload_so_data, preload_so_size);
+        close(fd);
+        if (written == (ssize_t)preload_so_size) {
             return path_buf;
         }
-        
-        /* Write the file */
-        int fd = open(path_buf, O_WRONLY | O_CREAT | O_TRUNC, 0755);
-        if (fd >= 0) {
-            ssize_t written = write(fd, preload_so_data, preload_so_size);
-            close(fd);
-            if (written == (ssize_t)preload_so_size) {
-                return path_buf;
-            }
-        }
     }
     
-    /* Fallback: write to $PREFIX/tmp */
-    snprintf(path_buf, path_size, "/data/data/com.termux/files/usr/tmp/libovgl_preload.so");
-    
-    int fd = open(path_buf, O_WRONLY | O_CREAT | O_TRUNC, 0755);
-    if (fd < 0) return NULL;
-    
-    ssize_t written = write(fd, preload_so_data, preload_so_size);
-    close(fd);
-    
-    if (written != (ssize_t)preload_so_size) {
-        unlink(path_buf);
-        return NULL;
-    }
-    
-    return path_buf;
+    return NULL;
 #else
-    /* No embedded preload - look for external file */
-    const char *home = getenv("HOME");
-    if (home) {
-        snprintf(path_buf, path_size, "%s/ovgl/libovgl_preload.so", home);
-        if (access(path_buf, R_OK) == 0) return path_buf;
-    }
-    
-    /* Try relative to executable */
-    snprintf(path_buf, path_size, "/data/data/com.termux/files/home/ovgl/libovgl_preload.so");
+    /* No embedded preload - look for external file in glibc lib */
+    snprintf(path_buf, path_size, "%s/libovgl_preload.so", GLIBC_LIB);
     if (access(path_buf, R_OK) == 0) return path_buf;
     
     return NULL;
@@ -402,7 +368,7 @@ static char **build_environment(const char *preload_path, int for_box64, int use
         /* Set BOX64_PATH so box64 can find the wrapper for fork/exec */
         const char *prefix = getenv("PREFIX");
         if (!prefix) prefix = "/data/data/com.termux/files/usr";
-        snprintf(buf, sizeof(buf), "BOX64_PATH=%s/ovgl/:%s/bin/", home ? home : "/data/data/com.termux/files/home", prefix);
+        snprintf(buf, sizeof(buf), "BOX64_PATH=%s/glibc/bin/:%s/bin/", prefix, prefix);
         new_env[j++] = strdup(buf);
         
         if (preload_path && use_preload) {

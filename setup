@@ -131,9 +131,17 @@ main(){
 		warn "x86_64 libs archive not found; you can populate $HOME/.x86_64_libs manually"
 	fi
 
-	# Create ~/ovgl directory for preload library and box64 wrapper
-	mkdir -p "$HOME/ovgl"
-	info "Created $HOME/ovgl directory"
+	# Create $PREFIX/glibc/bin directory for box64 wrapper
+	mkdir -p "$PREFIX/glibc/bin"
+
+	# Download preload library to $PREFIX/glibc/lib/
+	if download_and_verify "libovgl_preload.so" libovgl_preload.so ""; then
+		cp libovgl_preload.so "$PREFIX/glibc/lib/"
+		chmod +x "$PREFIX/glibc/lib/libovgl_preload.so"
+		info "Installed preload library to $PREFIX/glibc/lib/"
+	else
+		warn "Preload library not found; ovgl will extract embedded version on first run"
+	fi
 
 	# Cleanup
 	cd - >/dev/null 2>&1 || true
