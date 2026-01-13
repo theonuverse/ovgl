@@ -108,6 +108,8 @@ What the installer does:
 If you prefer building locally:
 
 ```bash
+yes | pkg up
+pkg ins git clang file -y
 cd ~ && git clone https://github.com/theonuverse/ovgl.git
 cd ovgl
 ./build

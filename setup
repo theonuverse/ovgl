@@ -125,8 +125,8 @@ main(){
 		warn "box64 not installed"
 	fi
 
-	if download_and_verify "x86_64_libs.tar.gz" x86_64_libs.tar.gz "$libs_sha"; then
-		install_x86_libs x86_64_libs.tar.gz
+	if download_and_verify "lib_x86_64.tar.gz" lib_x86_64.tar.gz "$libs_sha"; then
+		install_x86_libs lib_x86_64.tar.gz
 	else
 		warn "x86_64 libs archive not found; you can populate $PREFIX/glibc/lib_x86_64 manually"
 	fi
