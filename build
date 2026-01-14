@@ -28,6 +28,58 @@ if ! command -v clang >/dev/null 2>&1; then
     error "clang not found. Please install: pkg install clang"
 fi
 
+# ============== Step 0: Ensure lib_x86_64 is installed ==============
+info "Step 0: Ensuring lib_x86_64 is available under glibc prefix..."
+
+# Default URL can be overridden by setting LIB_X86_64_URL in the environment
+LIB_X86_64_URL="${LIB_X86_64_URL:-https://github.com/theonuverse/ovgl/releases/download/v0.0.1/lib_x86_64.tar.gz}"
+LIB_X86_64_TAR="lib_x86_64.tar.gz"
+TARGET_LIB_DIR="$GLIBC_PREFIX/lib_x86_64"
+
+if [ ! -d "$TARGET_LIB_DIR" ]; then
+    info "lib_x86_64 not found at $TARGET_LIB_DIR — downloading from $LIB_X86_64_URL"
+
+    if command -v curl >/dev/null 2>&1; then
+        curl -L --fail -o "$LIB_X86_64_TAR" "$LIB_X86_64_URL" || error "Failed to download $LIB_X86_64_URL"
+    elif command -v wget >/dev/null 2>&1; then
+        wget -O "$LIB_X86_64_TAR" "$LIB_X86_64_URL" || error "Failed to download $LIB_X86_64_URL"
+    else
+        error "Neither curl nor wget available to download lib_x86_64. Set up manually in $TARGET_LIB_DIR"
+    fi
+
+    info "Extracting $LIB_X86_64_TAR to $TARGET_LIB_DIR"
+    mkdir -p "$TARGET_LIB_DIR"
+    tar -xzf "$LIB_X86_64_TAR" -C "$TARGET_LIB_DIR" || error "Failed to extract $LIB_X86_64_TAR"
+    rm -f "$LIB_X86_64_TAR"
+    info "Installed lib_x86_64 to $TARGET_LIB_DIR"
+else
+    info "Found existing $TARGET_LIB_DIR — skipping download"
+fi
+
+# Ensure box64 is present in $PREFIX/bin
+BOX64_URL="${BOX64_URL:-https://github.com/theonuverse/ovgl/releases/download/v0.0.1/box64}"
+BOX64_DEST="$PREFIX/bin/box64"
+
+if [ ! -x "$BOX64_DEST" ]; then
+    info "box64 not found at $BOX64_DEST — downloading from $BOX64_URL"
+    if command -v curl >/dev/null 2>&1; then
+        curl -L --fail -o box64.tmp "$BOX64_URL" || warn "Failed to download box64"
+    elif command -v wget >/dev/null 2>&1; then
+        wget -O box64.tmp "$BOX64_URL" || warn "Failed to download box64"
+    else
+        warn "Neither curl nor wget available to download box64; please place box64 in $PREFIX/bin/"
+    fi
+
+    if [ -f box64.tmp ]; then
+        chmod +x box64.tmp || warn "chmod failed on downloaded box64"
+        mkdir -p "$PREFIX/bin"
+        mv box64.tmp "$BOX64_DEST" || cp box64.tmp "$BOX64_DEST" || warn "Failed to move box64 to $BOX64_DEST"
+        info "Installed box64 to $BOX64_DEST"
+    fi
+else
+    info "Found existing $BOX64_DEST — skipping download"
+fi
+
 # ============== Step 1: Build preload library (glibc) ==============
 
 info "Step 1: Building preload library with glibc..."
