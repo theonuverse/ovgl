@@ -73,8 +73,8 @@ If you prefer building locally:
 
 ```bash
 yes | pkg up
-pkg ins glibc-repo file git clang file -y
-pkg ins glibc -y
+pkg ins glibc-repo clang -y
+pkg ins glibc file git wget -y
 cd ~ && git clone https://github.com/theonuverse/ovgl.git
 cd ovgl
 ./build
