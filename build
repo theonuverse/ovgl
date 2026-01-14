@@ -21,12 +21,26 @@ info() { printf "${GREEN}[INFO]${NC} %s\n" "$1"; }
 warn() { printf "${YELLOW}[WARN]${NC} %s\n" "$1"; }
 error() { printf "${RED}[ERROR]${NC} %s\n" "$1" >&2; exit 1; }
 
+fix_libc_symlink(){
+    GLIBC_LIB="$PREFIX/glibc/lib"
+    if [ -f "$GLIBC_LIB/libc.so" ] && [ ! -L "$GLIBC_LIB/libc.so" ]; then
+        info "Backing up existing libc.so and creating symlink to libc.so.6"
+        mv "$GLIBC_LIB/libc.so" "$GLIBC_LIB/libc.so.script" || warn "Couldn't move libc.so"
+    fi
+    if [ ! -L "$GLIBC_LIB/libc.so" ]; then
+        ln -s "$GLIBC_LIB/libc.so.6" "$GLIBC_LIB/libc.so" || warn "Couldn't create libc.so symlink"
+    fi
+}
+
 cd "$SCRIPT_DIR"
 
 # Check for clang
 if ! command -v clang >/dev/null 2>&1; then
     error "clang not found. Please install: pkg install clang"
 fi
+
+# Fix possible libc.so file vs symlink issues before downloads/build
+fix_libc_symlink
 
 # ============== Step 0: Ensure lib_x86_64 is installed ==============
 info "Step 0: Ensuring lib_x86_64 is available under glibc prefix..."
@@ -40,11 +54,9 @@ if [ ! -d "$TARGET_LIB_DIR" ]; then
     info "lib_x86_64 not found at $TARGET_LIB_DIR — downloading from $LIB_X86_64_URL"
 
     if command -v curl >/dev/null 2>&1; then
-        curl -L --fail -o "$LIB_X86_64_TAR" "$LIB_X86_64_URL" || error "Failed to download $LIB_X86_64_URL"
-    elif command -v wget >/dev/null 2>&1; then
-        wget -O "$LIB_X86_64_TAR" "$LIB_X86_64_URL" || error "Failed to download $LIB_X86_64_URL"
+        curl -sL --fail -o "$LIB_X86_64_TAR" "$LIB_X86_64_URL" || error "Failed to download $LIB_X86_64_URL"
     else
-        error "Neither curl nor wget available to download lib_x86_64. Set up manually in $TARGET_LIB_DIR"
+        error "curl not available to download lib_x86_64. Install curl or set LIB_X86_64_URL to a local file"
     fi
 
     info "Extracting $LIB_X86_64_TAR to $TARGET_LIB_DIR"
@@ -63,11 +75,9 @@ BOX64_DEST="$PREFIX/bin/box64"
 if [ ! -x "$BOX64_DEST" ]; then
     info "box64 not found at $BOX64_DEST — downloading from $BOX64_URL"
     if command -v curl >/dev/null 2>&1; then
-        curl -L --fail -o box64.tmp "$BOX64_URL" || warn "Failed to download box64"
-    elif command -v wget >/dev/null 2>&1; then
-        wget -O box64.tmp "$BOX64_URL" || warn "Failed to download box64"
+        curl -sL --fail -o box64.tmp "$BOX64_URL" || error "Failed to download box64 from $BOX64_URL"
     else
-        warn "Neither curl nor wget available to download box64; please place box64 in $PREFIX/bin/"
+        error "curl not available to download box64. Install curl or place box64 in $PREFIX/bin/"
     fi
 
     if [ -f box64.tmp ]; then
