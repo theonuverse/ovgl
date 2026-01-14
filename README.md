@@ -40,43 +40,7 @@ Termux on Android uses **Bionic libc** (Android's C library), but many Linux bin
 
 ## How It Works
 
-```
-┌──────────────────────────────────────────────────────────────────────────┐
-│                           ovgl Architecture                               │
-├──────────────────────────────────────────────────────────────────────────┤
-│                                                                          │
-│   User runs: ovgl ./program                                              │
-│                     │                                                    │
-│                     ▼                                                    │
-│   ┌──────────────────────────────────────────────────────────────┐      │
-│   │  ovgl (native bionic binary)                                  │      │
-│   │  - Analyzes ELF header to detect architecture                 │      │
-│   │  - arm64 glibc → invokes glibc loader                        │      │
-│   │  - x86_64 → invokes box64 (with glibc loader if needed)      │      │
-│   │  - Sets environment variables and preload library             │      │
-│   └──────────────────────────────────────────────────────────────┘      │
-│                     │                                                    │
-│         ┌──────────┴──────────┐                                         │
-│         ▼                     ▼                                         │
-│   ┌─────────────┐      ┌─────────────────┐                              │
-│   │ ARM64 glibc │      │ x86_64 binary   │                              │
-│   │   binary    │      │                 │                              │
-│   └──────┬──────┘      └────────┬────────┘                              │
-│          ▼                      ▼                                       │
-│   ┌─────────────┐      ┌─────────────────┐                              │
-│   │ld-linux.so.1│      │     box64       │                              │
-│   │   loader    │      │   (emulator)    │                              │
-│   └──────┬──────┘      └────────┬────────┘                              │
-│          ▼                      ▼                                       │
-│   ┌──────────────────────────────────────────────────────────────┐      │
-│   │  libovgl_preload.so (loaded into process)                    │      │
-│   │  - Hooks execve() to rewrite child process execution         │      │
-│   │  - Hooks readlink() to fix /proc/self/exe                    │      │
-│   │  - Cleans environment for bionic binaries                    │      │
-│   └──────────────────────────────────────────────────────────────┘      │
-│                                                                          │
-└──────────────────────────────────────────────────────────────────────────┘
-```
+![ovgl Architecture](assets/ovgl_architecture_diagram.png)
 
 ## Installation
 
