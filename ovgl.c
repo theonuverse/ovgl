@@ -20,6 +20,8 @@
 #include <errno.h>
 #include <elf.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
+#include <signal.h>
 #include <limits.h>
 #include <libgen.h>
 
@@ -314,8 +316,8 @@ static char **build_environment(const char *preload_path, int for_box64, int use
     int envc = 0;
     while (environ[envc]) envc++;
     
-    /* Allocate space for existing + new vars + NULL (need more space for Android workarounds) */
-    char **new_env = malloc((envc + 30) * sizeof(char *));
+    /* Allocate space for existing + new vars + NULL */
+    char **new_env = malloc((envc + 15) * sizeof(char *));
     if (!new_env) return NULL;
     
     int j = 0;
@@ -333,12 +335,6 @@ static char **build_environment(const char *preload_path, int for_box64, int use
         if (strncmp(environ[i], "BOX64_PATH=", 11) == 0) continue;
         /* Keep user's BOX64_LD_LIBRARY_PATH if set, otherwise we'll add default */
         if (!for_box64 && strncmp(environ[i], "BOX64_LD_LIBRARY_PATH=", 22) == 0) continue;
-        /* Skip BOX64 vars we'll set ourselves */
-        if (strncmp(environ[i], "BOX64_MMAP32=", 13) == 0) continue;
-        if (strncmp(environ[i], "BOX64_NOSANDBOX=", 16) == 0) continue;
-        if (strncmp(environ[i], "BOX64_DYNAREC_STRONGMEM=", 24) == 0) continue;
-        if (strncmp(environ[i], "BOX64_DYNAREC_SAFEFLAGS=", 24) == 0) continue;
-        if (strncmp(environ[i], "BOX64_SYNC_ROUNDING=", 20) == 0) continue;
         
         new_env[j++] = strdup(environ[i]);
     }
@@ -376,35 +372,13 @@ static char **build_environment(const char *preload_path, int for_box64, int use
          * The preload .so is compiled for ARM64 (glibc) and cannot be loaded
          * by box64's x86_64 emulation. Setting it causes:
          *   "Warning, cannot pre-load ..."
-         * and potential instability. The preload library is only useful for
-         * ARM64 glibc binaries that fork/exec other glibc binaries.
+         * The preload library is only useful for ARM64 glibc binaries.
          */
         (void)preload_path;
         (void)use_preload;
         
         /* Fake uname to report x86_64 so launchers don't bail out */
         new_env[j++] = strdup("BOX64_UNAME=x86_64");
-        
-        /*
-         * Android-specific workarounds for box64:
-         * These help avoid EPERM errors on thread/signal operations that
-         * Android restricts but Linux normally allows.
-         */
-        
-        /* Allow 32-bit mmap addresses (some x86_64 code expects this) */
-        new_env[j++] = strdup("BOX64_MMAP32=1");
-        
-        /* Disable sandboxing attempts that fail on Android */
-        new_env[j++] = strdup("BOX64_NOSANDBOX=1");
-        
-        /* Use stronger memory ordering for better compatibility */
-        new_env[j++] = strdup("BOX64_DYNAREC_STRONGMEM=2");
-        
-        /* More conservative flag handling */
-        new_env[j++] = strdup("BOX64_DYNAREC_SAFEFLAGS=2");
-        
-        /* Sync rounding mode for FPU operations */
-        new_env[j++] = strdup("BOX64_SYNC_ROUNDING=1");
         
         /* Clear LD_PRELOAD for the native box64 binary itself */
         new_env[j++] = strdup("LD_PRELOAD=");
@@ -437,6 +411,115 @@ static void change_to_binary_dir(const char *binary_path) {
         chdir(dir);
     }
     free(path_copy);
+}
+
+/* ============== Termux Wake Lock Support ============== */
+
+/*
+ * Acquire Termux wake lock to prevent Android from throttling/sleeping
+ * the process. This helps with servers and long-running tasks.
+ * Returns the PID of the wake lock process, or -1 on failure.
+ */
+static pid_t acquire_wake_lock(int debug) {
+    const char *prefix = getenv("PREFIX");
+    if (!prefix) prefix = "/data/data/com.termux/files/usr";
+    
+    char wakelock_path[PATH_MAX];
+    snprintf(wakelock_path, sizeof(wakelock_path), "%s/bin/termux-wake-lock", prefix);
+    
+    /* Check if termux-wake-lock exists */
+    if (access(wakelock_path, X_OK) != 0) {
+        if (debug) {
+            fprintf(stderr, COLOR_YELLOW "ovgl:" COLOR_RESET " termux-wake-lock not found, skipping\n");
+        }
+        return -1;
+    }
+    
+    pid_t pid = fork();
+    if (pid == 0) {
+        /* Child: run termux-wake-lock silently */
+        int devnull = open("/dev/null", O_WRONLY);
+        if (devnull >= 0) {
+            dup2(devnull, STDOUT_FILENO);
+            dup2(devnull, STDERR_FILENO);
+            close(devnull);
+        }
+        execl(wakelock_path, "termux-wake-lock", NULL);
+        _exit(1);
+    } else if (pid > 0) {
+        /* Parent: wait briefly for wake lock to activate */
+        int status;
+        waitpid(pid, &status, 0);
+        if (debug) {
+            fprintf(stderr, COLOR_GREEN "ovgl:" COLOR_RESET " Wake lock acquired\n");
+        }
+        return pid;
+    }
+    return -1;
+}
+
+/*
+ * Release Termux wake lock
+ */
+static void release_wake_lock(int debug) {
+    const char *prefix = getenv("PREFIX");
+    if (!prefix) prefix = "/data/data/com.termux/files/usr";
+    
+    char wakeunlock_path[PATH_MAX];
+    snprintf(wakeunlock_path, sizeof(wakeunlock_path), "%s/bin/termux-wake-unlock", prefix);
+    
+    if (access(wakeunlock_path, X_OK) != 0) {
+        return;
+    }
+    
+    pid_t pid = fork();
+    if (pid == 0) {
+        /* Child: run termux-wake-unlock silently */
+        int devnull = open("/dev/null", O_WRONLY);
+        if (devnull >= 0) {
+            dup2(devnull, STDOUT_FILENO);
+            dup2(devnull, STDERR_FILENO);
+            close(devnull);
+        }
+        execl(wakeunlock_path, "termux-wake-unlock", NULL);
+        _exit(1);
+    } else if (pid > 0) {
+        int status;
+        waitpid(pid, &status, 0);
+        if (debug) {
+            fprintf(stderr, COLOR_GREEN "ovgl:" COLOR_RESET " Wake lock released\n");
+        }
+    }
+}
+
+/* ============== Signal Forwarding ============== */
+
+static volatile pid_t g_child_pid = -1;
+static volatile int g_debug = 0;
+
+static void signal_handler(int sig) {
+    if (g_child_pid > 0) {
+        /* Forward signal to child process group */
+        kill(-g_child_pid, sig);
+    }
+}
+
+static void setup_signal_forwarding(pid_t child_pid, int debug) {
+    g_child_pid = child_pid;
+    g_debug = debug;
+    
+    struct sigaction sa;
+    sa.sa_handler = signal_handler;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = SA_RESTART;
+    
+    /* Forward common signals to child */
+    sigaction(SIGINT, &sa, NULL);
+    sigaction(SIGTERM, &sa, NULL);
+    sigaction(SIGHUP, &sa, NULL);
+    sigaction(SIGQUIT, &sa, NULL);
+    sigaction(SIGUSR1, &sa, NULL);
+    sigaction(SIGUSR2, &sa, NULL);
 }
 
 /* ============== Usage and Error Messages ============== */
@@ -607,14 +690,14 @@ int main(int argc, char *argv[]) {
             return 1;
         }
         
-        /* Change to binary's directory */
-        change_to_binary_dir(binary_path);
+        /* Build argv */
+        char **new_argv;
+        const char *exec_path;
+        int orig_argc = argc - arg_start;
         
         if (box64_needs_glibc) {
             /* box64 is a glibc binary - run through loader */
-            /* argv: loader --library-path lib --argv0 box64 box64 binary [args...] */
-            int orig_argc = argc - arg_start;
-            char **new_argv = malloc((orig_argc + 8) * sizeof(char *));
+            new_argv = malloc((orig_argc + 8) * sizeof(char *));
             if (!new_argv) {
                 perror("malloc");
                 return 1;
@@ -633,18 +716,10 @@ int main(int argc, char *argv[]) {
                 new_argv[i++] = argv[arg_start + j];
             }
             new_argv[i] = NULL;
-            
-            if (debug) {
-                fprintf(stderr, COLOR_BLUE "ovgl:" COLOR_RESET " Executing: %s ... %s %s\n", GLIBC_LOADER, box64_path, binary_path);
-            }
-            
-            execve(GLIBC_LOADER, new_argv, new_env);
-            fprintf(stderr, COLOR_RED "ovgl:" COLOR_RESET " execve failed: %s\n", strerror(errno));
-            return 1;
+            exec_path = GLIBC_LOADER;
         } else {
             /* box64 is native bionic - run directly */
-            int orig_argc = argc - arg_start;
-            char **new_argv = malloc((orig_argc + 2) * sizeof(char *));
+            new_argv = malloc((orig_argc + 3) * sizeof(char *));
             if (!new_argv) {
                 perror("malloc");
                 return 1;
@@ -656,13 +731,45 @@ int main(int argc, char *argv[]) {
                 new_argv[i + 1] = argv[arg_start + i];
             }
             new_argv[orig_argc + 1] = NULL;
-            
-            if (debug) {
-                fprintf(stderr, COLOR_BLUE "ovgl:" COLOR_RESET " Executing: %s %s\n", box64_path, binary_path);
-            }
-            
-            execve(box64_path, new_argv, new_env);
+            exec_path = box64_path;
+        }
+        
+        if (debug) {
+            fprintf(stderr, COLOR_BLUE "ovgl:" COLOR_RESET " Executing: %s %s\n", exec_path, binary_path);
+        }
+        
+        /* Acquire wake lock before fork */
+        acquire_wake_lock(debug);
+        
+        /* Fork and exec */
+        pid_t child = fork();
+        if (child == 0) {
+            /* Child process - create new process group */
+            setpgid(0, 0);
+            change_to_binary_dir(binary_path);
+            execve(exec_path, new_argv, new_env);
             fprintf(stderr, COLOR_RED "ovgl:" COLOR_RESET " execve failed: %s\n", strerror(errno));
+            _exit(1);
+        } else if (child > 0) {
+            /* Parent process - set up signal forwarding and wait for child */
+            setpgid(child, child);
+            setup_signal_forwarding(child, debug);
+            
+            int status;
+            waitpid(child, &status, 0);
+            
+            /* Release wake lock */
+            release_wake_lock(debug);
+            
+            if (WIFEXITED(status)) {
+                return WEXITSTATUS(status);
+            } else if (WIFSIGNALED(status)) {
+                return 128 + WTERMSIG(status);
+            }
+            return 1;
+        } else {
+            perror("fork");
+            release_wake_lock(debug);
             return 1;
         }
         
@@ -721,16 +828,44 @@ int main(int argc, char *argv[]) {
             return 1;
         }
         
-        /* Change to binary's directory so it can find its resources */
-        change_to_binary_dir(binary_path);
-        
         if (debug) {
             fprintf(stderr, COLOR_BLUE "ovgl:" COLOR_RESET " Executing: %s --library-path %s %s\n", GLIBC_LOADER, GLIBC_LIB, binary_path);
         }
         
-        execve(GLIBC_LOADER, new_argv, new_env);
-        fprintf(stderr, COLOR_RED "ovgl:" COLOR_RESET " execve failed: %s\n", strerror(errno));
-        return 1;
+        /* Acquire wake lock before fork */
+        acquire_wake_lock(debug);
+        
+        /* Fork and exec */
+        pid_t child = fork();
+        if (child == 0) {
+            /* Child process - create new process group */
+            setpgid(0, 0);
+            change_to_binary_dir(binary_path);
+            execve(GLIBC_LOADER, new_argv, new_env);
+            fprintf(stderr, COLOR_RED "ovgl:" COLOR_RESET " execve failed: %s\n", strerror(errno));
+            _exit(1);
+        } else if (child > 0) {
+            /* Parent process - set up signal forwarding and wait for child */
+            setpgid(child, child);
+            setup_signal_forwarding(child, debug);
+            
+            int status;
+            waitpid(child, &status, 0);
+            
+            /* Release wake lock */
+            release_wake_lock(debug);
+            
+            if (WIFEXITED(status)) {
+                return WEXITSTATUS(status);
+            } else if (WIFSIGNALED(status)) {
+                return 128 + WTERMSIG(status);
+            }
+            return 1;
+        } else {
+            perror("fork");
+            release_wake_lock(debug);
+            return 1;
+        }
     }
     
     fprintf(stderr, COLOR_RED "ovgl:" COLOR_RESET " Unexpected error\n");
