@@ -314,8 +314,8 @@ static char **build_environment(const char *preload_path, int for_box64, int use
     int envc = 0;
     while (environ[envc]) envc++;
     
-    /* Allocate space for existing + new vars + NULL */
-    char **new_env = malloc((envc + 15) * sizeof(char *));
+    /* Allocate space for existing + new vars + NULL (need more space for Android workarounds) */
+    char **new_env = malloc((envc + 30) * sizeof(char *));
     if (!new_env) return NULL;
     
     int j = 0;
@@ -333,6 +333,12 @@ static char **build_environment(const char *preload_path, int for_box64, int use
         if (strncmp(environ[i], "BOX64_PATH=", 11) == 0) continue;
         /* Keep user's BOX64_LD_LIBRARY_PATH if set, otherwise we'll add default */
         if (!for_box64 && strncmp(environ[i], "BOX64_LD_LIBRARY_PATH=", 22) == 0) continue;
+        /* Skip BOX64 vars we'll set ourselves */
+        if (strncmp(environ[i], "BOX64_MMAP32=", 13) == 0) continue;
+        if (strncmp(environ[i], "BOX64_NOSANDBOX=", 16) == 0) continue;
+        if (strncmp(environ[i], "BOX64_DYNAREC_STRONGMEM=", 24) == 0) continue;
+        if (strncmp(environ[i], "BOX64_DYNAREC_SAFEFLAGS=", 24) == 0) continue;
+        if (strncmp(environ[i], "BOX64_SYNC_ROUNDING=", 20) == 0) continue;
         
         new_env[j++] = strdup(environ[i]);
     }
@@ -365,13 +371,40 @@ static char **build_environment(const char *preload_path, int for_box64, int use
         snprintf(buf, sizeof(buf), "BOX64_PATH=%s/glibc/bin/:%s/bin/", prefix, prefix);
         new_env[j++] = strdup(buf);
         
-        if (preload_path && use_preload) {
-            snprintf(buf, sizeof(buf), "BOX64_LD_PRELOAD=%s", preload_path);
-            new_env[j++] = strdup(buf);
-        }
+        /*
+         * DO NOT set BOX64_LD_PRELOAD for x86_64 binaries!
+         * The preload .so is compiled for ARM64 (glibc) and cannot be loaded
+         * by box64's x86_64 emulation. Setting it causes:
+         *   "Warning, cannot pre-load ..."
+         * and potential instability. The preload library is only useful for
+         * ARM64 glibc binaries that fork/exec other glibc binaries.
+         */
+        (void)preload_path;
+        (void)use_preload;
         
         /* Fake uname to report x86_64 so launchers don't bail out */
         new_env[j++] = strdup("BOX64_UNAME=x86_64");
+        
+        /*
+         * Android-specific workarounds for box64:
+         * These help avoid EPERM errors on thread/signal operations that
+         * Android restricts but Linux normally allows.
+         */
+        
+        /* Allow 32-bit mmap addresses (some x86_64 code expects this) */
+        new_env[j++] = strdup("BOX64_MMAP32=1");
+        
+        /* Disable sandboxing attempts that fail on Android */
+        new_env[j++] = strdup("BOX64_NOSANDBOX=1");
+        
+        /* Use stronger memory ordering for better compatibility */
+        new_env[j++] = strdup("BOX64_DYNAREC_STRONGMEM=2");
+        
+        /* More conservative flag handling */
+        new_env[j++] = strdup("BOX64_DYNAREC_SAFEFLAGS=2");
+        
+        /* Sync rounding mode for FPU operations */
+        new_env[j++] = strdup("BOX64_SYNC_ROUNDING=1");
         
         /* Clear LD_PRELOAD for the native box64 binary itself */
         new_env[j++] = strdup("LD_PRELOAD=");
