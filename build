@@ -21,6 +21,13 @@ info() { printf "${GREEN}[INFO]${NC} %s\n" "$1"; }
 warn() { printf "${YELLOW}[WARN]${NC} %s\n" "$1"; }
 error() { printf "${RED}[ERROR]${NC} %s\n" "$1" >&2; exit 1; }
 
+# Check for clean reinstall option
+CLEAN_REINSTALL=false
+if [ "$1" = "--clean-reinstall" ] || [ "$1" = "-c" ]; then
+    CLEAN_REINSTALL=true
+    info "Clean reinstall mode: will remove existing files and reinstall"
+fi
+
 fix_libc_symlink(){
     GLIBC_LIB="$PREFIX/glibc/lib"
     if [ -f "$GLIBC_LIB/libc.so" ] && [ ! -L "$GLIBC_LIB/libc.so" ]; then
@@ -32,7 +39,42 @@ fix_libc_symlink(){
     fi
 }
 
+# Clean reinstall function
+clean_reinstall() {
+    info "Cleaning existing installations..."
+    
+    # Remove ovgl binary
+    if [ -f "$PREFIX/bin/ovgl" ]; then
+        rm -f "$PREFIX/bin/ovgl" 2>/dev/null || true
+    fi
+    
+    # Remove preload library
+    if [ -f "$GLIBC_PREFIX/lib/libovgl_preload.so" ]; then
+        rm -f "$GLIBC_PREFIX/lib/libovgl_preload.so" 2>/dev/null || true
+    fi
+    
+    # Remove box64 wrapper
+    if [ -f "$GLIBC_PREFIX/bin/box64" ]; then
+        rm -f "$GLIBC_PREFIX/bin/box64" 2>/dev/null || true
+    fi
+    
+    # Remove lib_x86_64 directory
+    if [ -d "$GLIBC_PREFIX/lib_x86_64" ]; then
+        rm -rf "$GLIBC_PREFIX/lib_x86_64" 2>/dev/null || true
+    fi
+    
+    # Remove local build artifacts
+    rm -f libovgl_preload.so preload_data.h ovgl 2>/dev/null || true
+    
+    info "Clean complete"
+}
+
 cd "$SCRIPT_DIR"
+
+# Perform clean reinstall if requested
+if [ "$CLEAN_REINSTALL" = true ]; then
+    clean_reinstall
+fi
 
 # Check for clang
 if ! command -v clang >/dev/null 2>&1; then

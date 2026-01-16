@@ -562,6 +562,16 @@ static void print_version(void) {
 /* ============== Main ============== */
 
 int main(int argc, char *argv[]) {
+    /* Check for Android thread restrictions */
+    if (getuid() != 0 && geteuid() != 0) {
+        /* Non-root user - check if we're in a restricted environment */
+        char *term = getenv("TERM");
+        if (term && strcmp(term, "linux") == 0) {
+            /* Likely running in Android shell with restrictions */
+            /* We'll proceed but be more careful about process management */
+        }
+    }
+    
     int debug = 0;
     int use_preload = 1;
     int arg_start = 1;
@@ -739,12 +749,20 @@ int main(int argc, char *argv[]) {
         }
         
         /* Acquire wake lock before fork */
-        acquire_wake_lock(debug);
+        pid_t wakelock_pid = acquire_wake_lock(debug);
         
         /* Fork and exec */
         pid_t child = fork();
         if (child == 0) {
             /* Child process */
+            /* Reset signal handlers to default in child */
+            signal(SIGINT, SIG_DFL);
+            signal(SIGTERM, SIG_DFL);
+            signal(SIGHUP, SIG_DFL);
+            signal(SIGQUIT, SIG_DFL);
+            signal(SIGUSR1, SIG_DFL);
+            signal(SIGUSR2, SIG_DFL);
+            
             change_to_binary_dir(binary_path);
             execve(exec_path, new_argv, new_env);
             fprintf(stderr, COLOR_RED "ovgl:" COLOR_RESET " execve failed: %s\n", strerror(errno));
@@ -758,6 +776,12 @@ int main(int argc, char *argv[]) {
             
             /* Release wake lock */
             release_wake_lock(debug);
+            
+            /* Clean up wake lock process if it was started */
+            if (wakelock_pid > 0) {
+                kill(wakelock_pid, SIGTERM);
+                waitpid(wakelock_pid, NULL, 0);
+            }
             
             if (WIFEXITED(status)) {
                 return WEXITSTATUS(status);
@@ -831,12 +855,20 @@ int main(int argc, char *argv[]) {
         }
         
         /* Acquire wake lock before fork */
-        acquire_wake_lock(debug);
+        pid_t wakelock_pid = acquire_wake_lock(debug);
         
         /* Fork and exec */
         pid_t child = fork();
         if (child == 0) {
             /* Child process */
+            /* Reset signal handlers to default in child */
+            signal(SIGINT, SIG_DFL);
+            signal(SIGTERM, SIG_DFL);
+            signal(SIGHUP, SIG_DFL);
+            signal(SIGQUIT, SIG_DFL);
+            signal(SIGUSR1, SIG_DFL);
+            signal(SIGUSR2, SIG_DFL);
+            
             change_to_binary_dir(binary_path);
             execve(GLIBC_LOADER, new_argv, new_env);
             fprintf(stderr, COLOR_RED "ovgl:" COLOR_RESET " execve failed: %s\n", strerror(errno));
@@ -850,6 +882,12 @@ int main(int argc, char *argv[]) {
             
             /* Release wake lock */
             release_wake_lock(debug);
+            
+            /* Clean up wake lock process if it was started */
+            if (wakelock_pid > 0) {
+                kill(wakelock_pid, SIGTERM);
+                waitpid(wakelock_pid, NULL, 0);
+            }
             
             if (WIFEXITED(status)) {
                 return WEXITSTATUS(status);
