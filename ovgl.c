@@ -499,8 +499,8 @@ static volatile int g_debug = 0;
 
 static void signal_handler(int sig) {
     if (g_child_pid > 0) {
-        /* Forward signal to child process group */
-        kill(-g_child_pid, sig);
+        /* Forward signal to child process */
+        kill(g_child_pid, sig);
     }
 }
 
@@ -744,15 +744,13 @@ int main(int argc, char *argv[]) {
         /* Fork and exec */
         pid_t child = fork();
         if (child == 0) {
-            /* Child process - create new process group */
-            setpgid(0, 0);
+            /* Child process */
             change_to_binary_dir(binary_path);
             execve(exec_path, new_argv, new_env);
             fprintf(stderr, COLOR_RED "ovgl:" COLOR_RESET " execve failed: %s\n", strerror(errno));
             _exit(1);
         } else if (child > 0) {
             /* Parent process - set up signal forwarding and wait for child */
-            setpgid(child, child);
             setup_signal_forwarding(child, debug);
             
             int status;
@@ -838,15 +836,13 @@ int main(int argc, char *argv[]) {
         /* Fork and exec */
         pid_t child = fork();
         if (child == 0) {
-            /* Child process - create new process group */
-            setpgid(0, 0);
+            /* Child process */
             change_to_binary_dir(binary_path);
             execve(GLIBC_LOADER, new_argv, new_env);
             fprintf(stderr, COLOR_RED "ovgl:" COLOR_RESET " execve failed: %s\n", strerror(errno));
             _exit(1);
         } else if (child > 0) {
             /* Parent process - set up signal forwarding and wait for child */
-            setpgid(child, child);
             setup_signal_forwarding(child, debug);
             
             int status;
