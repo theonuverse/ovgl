@@ -112,6 +112,15 @@ mkdir -p "$GLIBC_PREFIX/bin"
 # ── step 1: preload library (glibc sysroot) ─────────────────────────
 info "Step 1: Building preload library..."
 
+# Locate GCC runtime (crtbeginS.o, libgcc) inside the glibc sysroot.
+GCC_LIB_DIR=""
+if [ -d "$GLIBC_PREFIX/lib/gcc" ]; then
+    GCC_LIB_DIR="$(find "$GLIBC_PREFIX/lib/gcc" -name crtbeginS.o -printf '%h' -quit 2>/dev/null || true)"
+fi
+[ -n "$GCC_LIB_DIR" ] || die "GCC runtime not found in $GLIBC_PREFIX/lib/gcc. Run: pkg install glibc-runner"
+
+info "Found GCC runtime at $GCC_LIB_DIR"
+
 LD_PRELOAD="" clang \
     --sysroot="$GLIBC_PREFIX" \
     -shared -fPIC -O2 \
@@ -119,6 +128,8 @@ LD_PRELOAD="" clang \
     --target=aarch64-linux-gnu \
     -I"$GLIBC_PREFIX/include" \
     -L"$GLIBC_PREFIX/lib" \
+    -L"$GCC_LIB_DIR" \
+    -B"$GCC_LIB_DIR" \
     -Wl,--dynamic-linker="$GLIBC_PREFIX/lib/ld-linux-aarch64.so.1" \
     -Wl,-rpath,"$GLIBC_PREFIX/lib" \
     -Wl,--no-as-needed \
