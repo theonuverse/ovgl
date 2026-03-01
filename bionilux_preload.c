@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 /*
- * ovgl_preload.c — LD_PRELOAD library for ovgl
+ * bionilux_preload.c — LD_PRELOAD library for bionilux
  *
  * Intercepts exec*() calls so that child processes spawned by a glibc
  * binary are transparently routed through the Termux glibc loader.
@@ -11,7 +11,7 @@
  *
  * Build (against glibc sysroot):
  *   clang --sysroot=$PREFIX/glibc -shared -fPIC -O2 -Wall -Wextra \
- *         -o libovgl_preload.so ovgl_preload.c -lc -ldl
+ *         -o libbionilux_preload.so bionilux_preload.c -lc -ldl
  */
 
 #define _GNU_SOURCE
@@ -30,10 +30,10 @@
 
 /* ── environment variable names ──────────────────────────────────── */
 
-#define GLIBC_LIB_ENV     "OVGL_GLIBC_LIB"
-#define GLIBC_LOADER_ENV  "OVGL_GLIBC_LOADER"
-#define OVGL_DEBUG_ENV    "OVGL_DEBUG"
-#define OVGL_ORIG_EXE_ENV "OVGL_ORIG_EXE"
+#define GLIBC_LIB_ENV     "BIONILUX_GLIBC_LIB"
+#define GLIBC_LOADER_ENV  "BIONILUX_GLIBC_LOADER"
+#define BIONILUX_DEBUG_ENV    "BIONILUX_DEBUG"
+#define BIONILUX_ORIG_EXE_ENV "BIONILUX_ORIG_EXE"
 
 /* ── debug logging ───────────────────────────────────────────────── */
 
@@ -49,7 +49,7 @@ static void debug_print(const char *fmt, ...)
 
 	va_list ap;
 	va_start(ap, fmt);
-	fprintf(stderr, "[ovgl] ");
+	fprintf(stderr, "[bionilux] ");
 	vfprintf(stderr, fmt, ap);
 	fputc('\n', stderr);
 	va_end(ap);
@@ -245,7 +245,7 @@ static char **build_loader_argv(const char *loader, const char *lib_path,
 }
 
 /*
- * Build envp for glibc child: keep everything, update OVGL_ORIG_EXE.
+ * Build envp for glibc child: keep everything, update BIONILUX_ORIG_EXE.
  */
 static char **build_new_envp(char *const envp[], const char *orig_exe)
 {
@@ -264,9 +264,9 @@ static char **build_new_envp(char *const envp[], const char *orig_exe)
 		    strstr(envp[i], "libtermux-exec"))
 			continue;
 
-		/* skip existing OVGL_ORIG_EXE */
-		if (strncmp(envp[i], OVGL_ORIG_EXE_ENV "=",
-			    strlen(OVGL_ORIG_EXE_ENV "=")) == 0)
+		/* skip existing BIONILUX_ORIG_EXE */
+		if (strncmp(envp[i], BIONILUX_ORIG_EXE_ENV "=",
+			    strlen(BIONILUX_ORIG_EXE_ENV "=")) == 0)
 			continue;
 
 		ev[j] = strdup(envp[i]);
@@ -274,11 +274,11 @@ static char **build_new_envp(char *const envp[], const char *orig_exe)
 		j++;
 	}
 
-	/* add OVGL_ORIG_EXE */
-	size_t len = strlen(OVGL_ORIG_EXE_ENV) + 1 + strlen(orig_exe) + 1;
+	/* add BIONILUX_ORIG_EXE */
+	size_t len = strlen(BIONILUX_ORIG_EXE_ENV) + 1 + strlen(orig_exe) + 1;
 	ev[j] = malloc(len);
 	if (!ev[j]) { free_strarray(ev); return NULL; }
-	snprintf(ev[j], len, "%s=%s", OVGL_ORIG_EXE_ENV, orig_exe);
+	snprintf(ev[j], len, "%s=%s", BIONILUX_ORIG_EXE_ENV, orig_exe);
 	j++;
 
 	ev[j] = NULL;
@@ -347,7 +347,7 @@ static char **build_clean_envp(char *const envp[])
 
 		/* remove glibc preload */
 		if (strncmp(envp[i], "LD_PRELOAD=", 11) == 0 &&
-		    strstr(envp[i], "libovgl_preload")) {
+		    strstr(envp[i], "libbionilux_preload")) {
 			debug_print("removing glibc LD_PRELOAD for bionic child");
 			continue;
 		}
@@ -369,7 +369,7 @@ int execve(const char *pathname, char *const argv[], char *const envp[])
 	const char *glibc_loader = getenv(GLIBC_LOADER_ENV);
 
 	if (!glibc_lib || !glibc_loader) {
-		debug_print("OVGL env vars not set, pass-through");
+		debug_print("BIONILUX env vars not set, pass-through");
 		return real_execve(pathname, argv, envp);
 	}
 
@@ -444,7 +444,7 @@ ssize_t readlink(const char *pathname, char *buf, size_t bufsiz)
 	ssize_t ret = real_readlink(pathname, buf, bufsiz);
 
 	if (ret > 0 && strcmp(pathname, "/proc/self/exe") == 0) {
-		const char *orig = getenv(OVGL_ORIG_EXE_ENV);
+		const char *orig = getenv(BIONILUX_ORIG_EXE_ENV);
 		if (orig) {
 			size_t len = strlen(orig);
 			if (len < bufsiz) {
@@ -464,7 +464,7 @@ ssize_t readlinkat(int dirfd, const char *pathname, char *buf, size_t bufsiz)
 	ssize_t ret = real_readlinkat(dirfd, pathname, buf, bufsiz);
 
 	if (ret > 0 && strcmp(pathname, "/proc/self/exe") == 0) {
-		const char *orig = getenv(OVGL_ORIG_EXE_ENV);
+		const char *orig = getenv(BIONILUX_ORIG_EXE_ENV);
 		if (orig) {
 			size_t len = strlen(orig);
 			if (len < bufsiz) {
@@ -489,7 +489,7 @@ static void init(void)
 	*(void **)&real_readlink   = dlsym(RTLD_NEXT, "readlink");
 	*(void **)&real_readlinkat = dlsym(RTLD_NEXT, "readlinkat");
 
-	debug_enabled = (getenv(OVGL_DEBUG_ENV) != NULL);
+	debug_enabled = (getenv(BIONILUX_DEBUG_ENV) != NULL);
 
-	debug_print("ovgl_preload loaded");
+	debug_print("bionilux_preload loaded");
 }

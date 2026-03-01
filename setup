@@ -1,15 +1,15 @@
 #!/bin/bash
 # SPDX-License-Identifier: MIT
 #
-# ovgl quick installer (v0.2.0)
-# Usage: curl -sL https://theonuverse.github.io/ovgl/setup | bash
+# bionilux quick installer (v0.2.0)
+# Usage: curl -sL https://theonuverse.github.io/bionilux/setup | bash
 #
 set -eu
 
 readonly VERSION="0.2.0"
 readonly PREFIX="${PREFIX:-/data/data/com.termux/files/usr}"
 readonly GLIBC_PREFIX="$PREFIX/glibc"
-readonly RELEASE_BASE="https://github.com/theonuverse/ovgl/releases/download/v${VERSION}"
+readonly RELEASE_BASE="https://github.com/theonuverse/bionilux/releases/download/v${VERSION}"
 
 # -- colours -----------------------------------------------------------------
 RED='\033[0;31m'
@@ -28,7 +28,7 @@ die()   { err "$1"; exit 1; }
 print_header() {
 	printf "\n"
 	printf "${BLUE}+------------------------------------+${NC}\n"
-	printf "${BLUE}|   ovgl Quick Installer  (v%s)   |${NC}\n" "$VERSION"
+	printf "${BLUE}|   bionilux Quick Installer  (v%s)   |${NC}\n" "$VERSION"
 	printf "${BLUE}+------------------------------------+${NC}\n\n"
 }
 
@@ -90,10 +90,10 @@ main() {
 	trap 'rm -rf "$tmpdir"' EXIT
 	cd "$tmpdir"
 
-	# -- ovgl binary --
-	download ovgl ovgl
-	install -m 755 ovgl "$PREFIX/bin/ovgl"
-	info "Installed ovgl to $PREFIX/bin/"
+	# -- bionilux binary --
+	download bionilux bionilux
+	install -m 755 bionilux "$PREFIX/bin/bionilux"
+	info "Installed bionilux to $PREFIX/bin/"
 
 	# -- box64 --
 	if download box64 box64; then
@@ -115,11 +115,11 @@ main() {
 	fi
 
 	# -- preload library --
-	if download libovgl_preload.so libovgl_preload.so; then
-		install -m 755 libovgl_preload.so "$GLIBC_PREFIX/lib/libovgl_preload.so"
+	if download libbionilux_preload.so libbionilux_preload.so; then
+		install -m 755 libbionilux_preload.so "$GLIBC_PREFIX/lib/libbionilux_preload.so"
 		info "Installed preload library to $GLIBC_PREFIX/lib/"
 	else
-		warn "Preload library not found; ovgl will extract its embedded copy"
+		warn "Preload library not found; bionilux will extract its embedded copy"
 	fi
 
 	# -- glibc bin dir (for box64 wrapper) --
@@ -130,10 +130,10 @@ main() {
 	printf "${GREEN}+------------------------------------+${NC}\n"
 	printf "${GREEN}|        Installation complete       |${NC}\n"
 	printf "${GREEN}+------------------------------------+${NC}\n\n"
-	printf "  ovgl / box64  : ${YELLOW}%s/bin/${NC}\n" "$PREFIX"
+	printf "  bionilux / box64  : ${YELLOW}%s/bin/${NC}\n" "$PREFIX"
 	printf "  x86_64 libs   : ${YELLOW}%s${NC}\n" "$libdir"
-	printf "  preload       : ${YELLOW}%s/lib/libovgl_preload.so${NC}\n\n" "$GLIBC_PREFIX"
-	printf "${BLUE}Run:${NC}  ovgl <binary> [args ...]\n\n"
+	printf "  preload       : ${YELLOW}%s/lib/libbionilux_preload.so${NC}\n\n" "$GLIBC_PREFIX"
+	printf "${BLUE}Run:${NC}  bionilux <binary> [args ...]\n\n"
 }
 
 main "$@"

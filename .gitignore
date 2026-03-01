@@ -1,12 +1,13 @@
 # Build artefacts
 preload_data.h
-libovgl_preload.so
+libbionilux_preload.so
 *.o
 *.bak
 
 # Binaries
-/ovgl
+/bionilux
 /box64
 
 # Legacy lib path (pre-v0.2.0)
 lib_x86_64*
+ovgl

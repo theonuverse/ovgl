@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 /*
- * ovgl - Run unpatched glibc/x86_64 binaries on Android Termux
+ * bionilux - Run unpatched glibc/x86_64 binaries on Android Termux
  *
  * Native bionic executable that detects binary architecture, invokes
  * the glibc dynamic linker for arm64 glibc binaries, or box64 for
@@ -8,7 +8,7 @@
  * process support.
  *
  * Build (bionic, on Termux):
- *   clang -O2 -Wall -Wextra -Wpedantic -o ovgl ovgl.c -DEMBED_PRELOAD
+ *   clang -O2 -Wall -Wextra -Wpedantic -o bionilux bionilux.c -DEMBED_PRELOAD
  */
 
 #define _GNU_SOURCE
@@ -28,7 +28,7 @@
 
 /* ── version ─────────────────────────────────────────────────────── */
 
-#define OVGL_VERSION "0.2.0"
+#define BIONILUX_VERSION "0.2.0"
 
 /* ── paths ───────────────────────────────────────────────────────── */
 
@@ -53,16 +53,16 @@
 /* ── logging helpers ─────────────────────────────────────────────── */
 
 #define msg_info(...) \
-	do { fprintf(stderr, C_BLUE   "ovgl: " C_RESET __VA_ARGS__); \
+	do { fprintf(stderr, C_BLUE   "bionilux: " C_RESET __VA_ARGS__); \
 	     fputc('\n', stderr); } while (0)
 #define msg_warn(...) \
-	do { fprintf(stderr, C_YELLOW "ovgl: " C_RESET __VA_ARGS__); \
+	do { fprintf(stderr, C_YELLOW "bionilux: " C_RESET __VA_ARGS__); \
 	     fputc('\n', stderr); } while (0)
 #define msg_err(...)  \
-	do { fprintf(stderr, C_RED    "ovgl: " C_RESET __VA_ARGS__); \
+	do { fprintf(stderr, C_RED    "bionilux: " C_RESET __VA_ARGS__); \
 	     fputc('\n', stderr); } while (0)
 #define msg_ok(...)   \
-	do { fprintf(stderr, C_GREEN  "ovgl: " C_RESET __VA_ARGS__); \
+	do { fprintf(stderr, C_GREEN  "bionilux: " C_RESET __VA_ARGS__); \
 	     fputc('\n', stderr); } while (0)
 
 /* ── embedded preload library ────────────────────────────────────── */
@@ -318,7 +318,7 @@ static char *extract_preload(char *buf, size_t bufsz)
 	if (preload_so_size == 0)
 		return NULL;
 
-	snprintf(buf, bufsz, "%s/libovgl_preload.so", GLIBC_LIB);
+	snprintf(buf, bufsz, "%s/libbionilux_preload.so", GLIBC_LIB);
 
 	/* skip write if size matches (common case) */
 	if (stat(buf, &st) == 0 && (size_t)st.st_size == preload_so_size)
@@ -351,7 +351,7 @@ static char *extract_preload(char *buf, size_t bufsz)
 
 	return buf;
 #else
-	snprintf(buf, bufsz, "%s/libovgl_preload.so", GLIBC_LIB);
+	snprintf(buf, bufsz, "%s/libbionilux_preload.so", GLIBC_LIB);
 	return access(buf, R_OK) == 0 ? buf : NULL;
 #endif
 }
@@ -398,11 +398,11 @@ static void free_env(char **env)
 /*
  * Build a new environment array for the child process.
  *
- * @preload_path  – path to libovgl_preload.so (may be NULL)
+ * @preload_path  – path to libbionilux_preload.so (may be NULL)
  * @for_box64     – true when launching an x86_64 binary via box64
  * @use_preload   – false when user passed -n
  * @orig_binary   – resolved path of the target binary
- * @debug         – enable OVGL_DEBUG in child
+ * @debug         – enable BIONILUX_DEBUG in child
  */
 static char **build_environment(const char *preload_path, int for_box64,
 				int use_preload, const char *orig_binary,
@@ -423,9 +423,9 @@ static char **build_environment(const char *preload_path, int for_box64,
 	/* copy existing, filtering vars we'll override */
 	for (size_t i = 0; i < envc; i++) {
 		if (strncmp(environ[i], "LD_PRELOAD=", 11) == 0)        continue;
-		if (strncmp(environ[i], "OVGL_GLIBC_LIB=", 16) == 0)   continue;
-		if (strncmp(environ[i], "OVGL_GLIBC_LOADER=", 18) == 0) continue;
-		if (strncmp(environ[i], "OVGL_ORIG_EXE=", 14) == 0)     continue;
+		if (strncmp(environ[i], "BIONILUX_GLIBC_LIB=", 16) == 0)   continue;
+		if (strncmp(environ[i], "BIONILUX_GLIBC_LOADER=", 18) == 0) continue;
+		if (strncmp(environ[i], "BIONILUX_ORIG_EXE=", 14) == 0)     continue;
 		if (strncmp(environ[i], "BOX64_LD_PRELOAD=", 17) == 0)  continue;
 		if (strncmp(environ[i], "BOX64_PATH=", 11) == 0)        continue;
 
@@ -439,15 +439,15 @@ static char **build_environment(const char *preload_path, int for_box64,
 		j++;
 	}
 
-	/* OVGL env vars for the preload library */
-	env[j] = xasprintf("OVGL_GLIBC_LIB=%s", GLIBC_LIB);
+	/* BIONILUX env vars for the preload library */
+	env[j] = xasprintf("BIONILUX_GLIBC_LIB=%s", GLIBC_LIB);
 	if (!env[j]) { free_env(env); return NULL; } j++;
 
-	env[j] = xasprintf("OVGL_GLIBC_LOADER=%s", GLIBC_LOADER);
+	env[j] = xasprintf("BIONILUX_GLIBC_LOADER=%s", GLIBC_LOADER);
 	if (!env[j]) { free_env(env); return NULL; } j++;
 
 	if (orig_binary) {
-		env[j] = xasprintf("OVGL_ORIG_EXE=%s", orig_binary);
+		env[j] = xasprintf("BIONILUX_ORIG_EXE=%s", orig_binary);
 		if (!env[j]) { free_env(env); return NULL; } j++;
 	}
 
@@ -485,7 +485,7 @@ static char **build_environment(const char *preload_path, int for_box64,
 	}
 
 	if (debug) {
-		env[j] = xstrdup("OVGL_DEBUG=1");
+		env[j] = xstrdup("BIONILUX_DEBUG=1");
 		if (!env[j]) { free_env(env); return NULL; } j++;
 	}
 
@@ -656,7 +656,7 @@ static int run_child(const char *exec_path, char **argv, char **envp,
 static void print_usage(const char *prog)
 {
 	fprintf(stderr,
-		C_BLUE "ovgl" C_RESET " v" OVGL_VERSION
+		C_BLUE "bionilux" C_RESET " v" BIONILUX_VERSION
 		" — Run glibc/x86_64 binaries on Termux\n\n"
 		C_YELLOW "Usage:" C_RESET " %s [options] <binary> [args...]\n\n"
 		C_YELLOW "Options:" C_RESET "\n"
@@ -679,7 +679,7 @@ static void print_usage(const char *prog)
 
 static void print_version(void)
 {
-	printf("ovgl %s\n", OVGL_VERSION);
+	printf("bionilux %s\n", BIONILUX_VERSION);
 	printf("loader : %s\n", GLIBC_LOADER);
 	printf("x86_64 : %s\n", GLIBC_LIB_X86);
 #ifdef EMBED_PRELOAD

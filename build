@@ -1,7 +1,7 @@
 #!/data/data/com.termux/files/usr/bin/bash
 # SPDX-License-Identifier: MIT
 #
-# build — Build and install ovgl v0.2.0
+# build — Build and install bionilux v0.2.0
 #
 # Usage:
 #   ./build              Build and install
@@ -13,12 +13,12 @@ set -eu
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PREFIX="${PREFIX:-/data/data/com.termux/files/usr}"
 GLIBC_PREFIX="$PREFIX/glibc"
-RELEASE_URL="https://github.com/theonuverse/ovgl/releases/download/v0.2.0"
+RELEASE_URL="https://github.com/theonuverse/bionilux/releases/download/v0.2.0"
 
 X86_LIB_DIR="$GLIBC_PREFIX/lib/x86_64-linux-gnu"
 BOX64_DEST="$PREFIX/bin/box64"
-PRELOAD_DEST="$GLIBC_PREFIX/lib/libovgl_preload.so"
-OVGL_DEST="$PREFIX/bin/ovgl"
+PRELOAD_DEST="$GLIBC_PREFIX/lib/libbionilux_preload.so"
+BIONILUX_DEST="$PREFIX/bin/bionilux"
 
 # ── colours ──────────────────────────────────────────────────────────
 RED='\033[0;31m'
@@ -35,13 +35,13 @@ die()   { printf "${RED}[ERROR]${NC} %s\n" "$*" >&2; exit 1; }
 # ── clean ────────────────────────────────────────────────────────────
 do_clean() {
     info "Cleaning old installation..."
-    rm -f  "$OVGL_DEST"                         2>/dev/null || true
+    rm -f  "$BIONILUX_DEST"                         2>/dev/null || true
     rm -f  "$PRELOAD_DEST"                      2>/dev/null || true
     rm -f  "$GLIBC_PREFIX/bin/box64"            2>/dev/null || true
     rm -f  "$BOX64_DEST"                        2>/dev/null || true
     rm -rf "$GLIBC_PREFIX/lib_x86_64"           2>/dev/null || true
     rm -rf "$X86_LIB_DIR"                       2>/dev/null || true
-    rm -f  ovgl libovgl_preload.so preload_data.h 2>/dev/null || true
+    rm -f  bionilux libbionilux_preload.so preload_data.h 2>/dev/null || true
     ok "Clean complete"
 }
 
@@ -126,12 +126,12 @@ LD_PRELOAD="" clang \
     -Wl,--dynamic-linker="$GLIBC_PREFIX/lib/ld-linux-aarch64.so.1" \
     -Wl,-rpath,"$GLIBC_PREFIX/lib" \
     -Wl,--no-as-needed \
-    -o libovgl_preload.so \
-    ovgl_preload.c \
+    -o libbionilux_preload.so \
+    bionilux_preload.c \
     -lc -ldl \
-    || die "Failed to build libovgl_preload.so"
+    || die "Failed to build libbionilux_preload.so"
 
-ok "Built libovgl_preload.so ($(wc -c < libovgl_preload.so) bytes)"
+ok "Built libbionilux_preload.so ($(wc -c < libbionilux_preload.so) bytes)"
 
 # ── step 2: embedded preload header ─────────────────────────────────
 info "Step 2: Generating preload_data.h..."
@@ -139,7 +139,7 @@ info "Step 2: Generating preload_data.h..."
 {
     echo "/* Auto-generated — do not edit */"
     echo "static const unsigned char preload_so_data[] = {"
-    od -An -tx1 -v libovgl_preload.so \
+    od -An -tx1 -v libbionilux_preload.so \
         | sed 's/[0-9a-f]\{2\}/0x&,/g; s/  */ /g; s/^/    /'
     echo "};"
     echo "static const unsigned int preload_so_size = sizeof(preload_so_data);"
@@ -147,54 +147,54 @@ info "Step 2: Generating preload_data.h..."
 
 ok "Generated preload_data.h ($(wc -l < preload_data.h) lines)"
 
-# ── step 3: ovgl binary (bionic) ────────────────────────────────────
-info "Step 3: Building ovgl..."
+# ── step 3: bionilux binary (bionic) ────────────────────────────────────
+info "Step 3: Building bionilux..."
 
 clang \
     -O2 -Wall -Wextra -Wpedantic \
     -DEMBED_PRELOAD \
-    -o ovgl \
-    ovgl.c \
-    || die "Failed to build ovgl"
+    -o bionilux \
+    bionilux.c \
+    || die "Failed to build bionilux"
 
-ok "Built ovgl ($(wc -c < ovgl) bytes)"
+ok "Built bionilux ($(wc -c < bionilux) bytes)"
 
 # ── step 4: verify ──────────────────────────────────────────────────
 info "Step 4: Verifying..."
 
 if command -v file >/dev/null 2>&1; then
-    printf "\n${BLUE}libovgl_preload.so:${NC}\n"
-    file libovgl_preload.so
-    printf "\n${BLUE}ovgl:${NC}\n"
-    file ovgl
+    printf "\n${BLUE}libbionilux_preload.so:${NC}\n"
+    file libbionilux_preload.so
+    printf "\n${BLUE}bionilux:${NC}\n"
+    file bionilux
 else
-    info "libovgl_preload.so: $(wc -c < libovgl_preload.so) bytes"
-    info "ovgl: $(wc -c < ovgl) bytes"
+    info "libbionilux_preload.so: $(wc -c < libbionilux_preload.so) bytes"
+    info "bionilux: $(wc -c < bionilux) bytes"
 fi
 
 # ── step 5: install ─────────────────────────────────────────────────
 info "Step 5: Installing..."
 
-install -m 755 libovgl_preload.so "$PRELOAD_DEST" \
+install -m 755 libbionilux_preload.so "$PRELOAD_DEST" \
     || die "Failed to install preload library"
 
-if ! install -m 755 ovgl "$OVGL_DEST" 2>/dev/null; then
+if ! install -m 755 bionilux "$BIONILUX_DEST" 2>/dev/null; then
     warn "Binary busy — atomic replace..."
-    tmpbin="$(mktemp "$OVGL_DEST.XXXXXX")"
-    cp ovgl "$tmpbin"
+    tmpbin="$(mktemp "$BIONILUX_DEST.XXXXXX")"
+    cp bionilux "$tmpbin"
     chmod 755 "$tmpbin"
-    mv -f "$tmpbin" "$OVGL_DEST" \
-        || die "Failed to install ovgl (still running?)"
+    mv -f "$tmpbin" "$BIONILUX_DEST" \
+        || die "Failed to install bionilux (still running?)"
 fi
 
-ok "Installed ovgl        → $OVGL_DEST"
+ok "Installed bionilux        → $BIONILUX_DEST"
 ok "Installed preload     → $PRELOAD_DEST"
 ok "x86_64 libs           → $X86_LIB_DIR"
 ok "box64                 → $BOX64_DEST"
 
 printf "\n${GREEN}════════════════════════════════════════${NC}\n"
-printf "${GREEN}  ovgl v0.2.0 installed successfully${NC}\n"
+printf "${GREEN}  bionilux v0.2.0 installed successfully${NC}\n"
 printf "${GREEN}════════════════════════════════════════${NC}\n\n"
-printf "  ovgl <binary> [args...]     Run a binary\n"
-printf "  ovgl -d <binary>            Debug mode\n"
-printf "  ovgl --version              Version info\n\n"
+printf "  bionilux <binary> [args...]     Run a binary\n"
+printf "  bionilux -d <binary>            Debug mode\n"
+printf "  bionilux --version              Version info\n\n"

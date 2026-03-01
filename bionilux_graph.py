@@ -1,25 +1,25 @@
 from graphviz import Digraph
 
-def create_ovgl_diagram():
+def create_bionilux_diagram():
     # 'dot' für klassische Hierarchien
-    dot = Digraph('ovgl_architecture', format='png')
+    dot = Digraph('bionilux_architecture', format='png')
     dot.attr(rankdir='TB', nodesep='0.5', ranksep='0.5')
     
     # Standard-Styling für die Boxen
     dot.attr('node', shape='box', style='rounded,filled', fillcolor='#f9f9f9', fontname='Arial', fontsize='10')
 
     # Hauptknoten definieren
-    dot.node('user', 'User runs: ovgl ./program', shape='plaintext', fillcolor='none')
+    dot.node('user', 'User runs: bionilux ./program', shape='plaintext', fillcolor='none')
     
-    # Große ovgl Box (Main Logic)
-    ovgl_main_label = (
-        'ovgl (native bionic binary)\n'
+    # Große bionilux Box (Main Logic)
+    bionilux_main_label = (
+        'bionilux (native bionic binary)\n'
         '• Analyzes ELF header to detect architecture\n'
         '• arm64 glibc -> invokes glibc loader\n'
         '• x86_64 -> invokes box64\n'
         '• Sets environment variables and preload library'
     )
-    dot.node('ovgl', ovgl_main_label, fillcolor='#e1f5fe', color='#01579b')
+    dot.node('bionilux', bionilux_main_label, fillcolor='#e1f5fe', color='#01579b')
 
     # Pfad Weichen
     dot.node('arm64', 'ARM64 glibc\nbinary')
@@ -30,7 +30,7 @@ def create_ovgl_diagram():
 
     # Preload Box
     preload_label = (
-        'libovgl_preload.so (loaded into process)\n'
+        'libbionilux_preload.so (loaded into process)\n'
         '• Hooks execve() to rewrite child process execution\n'
         '• Hooks readlink() to fix /proc/self/exe\n'
         '• Cleans environment for bionic binaries'
@@ -38,9 +38,9 @@ def create_ovgl_diagram():
     dot.node('preload', preload_label, fillcolor='#fff9c4', color='#fbc02d')
 
     # Verbindungen (Edges)
-    dot.edge('user', 'ovgl')
-    dot.edge('ovgl', 'arm64')
-    dot.edge('ovgl', 'x86')
+    dot.edge('user', 'bionilux')
+    dot.edge('bionilux', 'arm64')
+    dot.edge('bionilux', 'x86')
     
     dot.edge('arm64', 'loader')
     dot.edge('x86', 'box64')
@@ -49,7 +49,7 @@ def create_ovgl_diagram():
     dot.edge('box64', 'preload')
 
     # Speichern und anzeigen
-    dot.render('ovgl_architecture_diagram', view=True)
+    dot.render('bionilux_architecture_diagram', view=True)
 
 if __name__ == "__main__":
-    create_ovgl_diagram()
+    create_bionilux_diagram()
